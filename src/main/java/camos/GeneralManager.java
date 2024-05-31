@@ -54,8 +54,7 @@ public class GeneralManager {
 
     public static DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-
-
+    public static boolean useGraphhopperForTests = true;
 
 
     public static void main(String[] args) throws Exception {

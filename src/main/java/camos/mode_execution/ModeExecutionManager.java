@@ -198,12 +198,14 @@ public class ModeExecutionManager {
         distanceMap = new HashMap<>();
         timeMap = new HashMap<>();
 
-        graphHopper = new GraphHopper();
-        graphHopper.setOSMFile("sources\\merged.osm.pbf"); //TODO
-        graphHopper.setGraphHopperLocation("target/routing-graph-cache");
-        graphHopper.setProfiles(new Profile("car").setVehicle("car").setTurnCosts(false),new Profile("foot").setVehicle("foot").setTurnCosts(false));
-        graphHopper.getCHPreparationHandler().setCHProfiles(new CHProfile("car"),new CHProfile("foot"));
-        graphHopper.importOrLoad();
+        if(GeneralManager.useGraphhopperForTests){
+            graphHopper = new GraphHopper();
+            graphHopper.setOSMFile("sources\\merged.osm.pbf"); //TODO
+            graphHopper.setGraphHopperLocation("target/routing-graph-cache");
+            graphHopper.setProfiles(new Profile("car").setVehicle("car").setTurnCosts(false),new Profile("foot").setVehicle("foot").setTurnCosts(false));
+            graphHopper.getCHPreparationHandler().setCHProfiles(new CHProfile("car"),new CHProfile("foot"));
+            graphHopper.importOrLoad();
+        }
 
         JSONObject config = new JSONObject(IOUtils.toString(new FileInputStream("testConfig.json"), "UTF-8"));
         getGlobalConfig(config);
