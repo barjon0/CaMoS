@@ -40,5 +40,5 @@ tasks.test {
 
 
 application {
-    mainClass.set("mobilitysimulation.SimulationManager")
+    mainClass.set("mobilitysimulation.GeneralManager")
 }
