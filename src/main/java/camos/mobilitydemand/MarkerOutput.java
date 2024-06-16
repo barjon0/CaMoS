@@ -16,6 +16,7 @@ import java.util.Map;
 
 public class MarkerOutput {
 
+    //here change target location to only one faculty
     public static void readAllAgentsAndOutputJson(String filePathToAgents, String resultFileName, List<String> allPostcodes){
         File agentsFile = new File(filePathToAgents);
 

@@ -48,7 +48,7 @@ public abstract class MobilityMode {
      *
      * @param agents the agents input into the mode
      */
-    public abstract void prepareMode(List<Agent> agents);
+    public abstract void prepareMode(List<Agent> agents) throws Exception;
 
     /**
      * Starts the actual execution of the mobility mode.

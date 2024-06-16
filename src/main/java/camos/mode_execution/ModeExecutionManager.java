@@ -20,7 +20,6 @@ import java.util.*;
 
 public class ModeExecutionManager {
 
-
     public static Map<String,Object> configValues;
 
     public static MobilityMode compareMode;
@@ -54,7 +53,6 @@ public class ModeExecutionManager {
         graphHopper.setProfiles(new Profile("car").setVehicle("car").setTurnCosts(false),new Profile("foot").setVehicle("foot").setTurnCosts(false));
         graphHopper.getCHPreparationHandler().setCHProfiles(new CHProfile("car"),new CHProfile("foot"));
         graphHopper.importOrLoad();
-
         JSONObject config = new JSONObject(IOUtils.toString(new FileInputStream(configPath), "UTF-8"));
         getGlobalConfig(config);
 
@@ -72,6 +70,7 @@ public class ModeExecutionManager {
 
                 PostcodeManager.setCoordinateReferenceSystem(CRS.decode("EPSG:3857"));
                 PostcodeManager.makePostcodePolygonMap();
+                System.out.println("Postcode stuff done");
                 //TODO sortiere modes nach compare to
                 for(String mode : modes){
                     startMode(mode,agents);
@@ -83,7 +82,7 @@ public class ModeExecutionManager {
     }
 
 
-    public static void startMode(String modeName, List<Agent> agents){
+    public static void startMode(String modeName, List<Agent> agents) throws Exception {
         MobilityMode mode = findMode(modeName);
         mode.prepareMode(agents);
         mode.startMode();
@@ -200,11 +199,17 @@ public class ModeExecutionManager {
 
         if(GeneralManager.useGraphhopperForTests){
             graphHopper = new GraphHopper();
+            System.out.println("reading in osm file");
             graphHopper.setOSMFile("sources\\merged.osm.pbf"); //TODO
+            System.out.println("done reading");
             graphHopper.setGraphHopperLocation("target/routing-graph-cache");
+            System.out.println("done reading");
             graphHopper.setProfiles(new Profile("car").setVehicle("car").setTurnCosts(false),new Profile("foot").setVehicle("foot").setTurnCosts(false));
+            System.out.println("done reading");
             graphHopper.getCHPreparationHandler().setCHProfiles(new CHProfile("car"),new CHProfile("foot"));
+            System.out.println("done reading");
             graphHopper.importOrLoad();
+            System.out.println("done generating profiles");
         }
 
         JSONObject config = new JSONObject(IOUtils.toString(new FileInputStream("testConfig.json"), "UTF-8"));

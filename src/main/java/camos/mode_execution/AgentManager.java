@@ -43,14 +43,19 @@ public class AgentManager {
                             }
                             org.json.JSONObject agentObject = agentArray.getJSONObject(i);
                             Coordinate homePosition = new Coordinate(agentObject.getDouble("home location longitude"),agentObject.getDouble("home location latitude"));
-                            Agent agent = new Agent(agentObject.getLong("agent id"),homePosition,new StudentVehicle(),new Request());
+                            Agent agent;
+
+                            agent = new Agent(agentObject.getLong("agent id"),homePosition, new StudentVehicle());
+
                             int low = 1;
                             int high = 101;
                             int result = GeneralManager.random.nextInt(high-low) + low;
                             if(result> ModeExecutionManager.percentOfWillingStudents){
                                 agent.setWillingToUseAlternatives(false);
                             }
-                            Request request = new Request(agent,Requesttype.BOTH,postcode,agentObject.getString("uni location"),homePosition, ModeExecutionManager.turnUniPostcodeIntoCoordinate(agentObject.getString("uni location")));
+
+                            // FIXME: changed target to same PLZ
+                            Request request = new Request(agent,Requesttype.BOTH,postcode,GeneralManager.uniPLZ ,homePosition, ModeExecutionManager.turnUniPostcodeIntoCoordinate(GeneralManager.uniPLZ));
 
                             try {
                                 String departureTimeString = "02.02.2023 " + agentObject.getString("departure time");

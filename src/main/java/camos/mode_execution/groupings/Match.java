@@ -8,8 +8,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Match extends Grouping implements Comparable{
 
@@ -20,6 +19,14 @@ public class Match extends Grouping implements Comparable{
     LocalDateTime timeIntervalStart;
     LocalDateTime timeIntervalEnd;
 
+    boolean isWayToWork;
+    Agent selectedDriver;
+
+    Match partner;
+    int maxSeats;
+    Coordinate centroid;
+
+    List<Agent> possDrivers;
 
     public Match(List<Agent> agents, Map<Coordinate,String> differentStops, Agent driver, Vehicle vehicle, Coordinate startPosition, Coordinate endPosition, Requesttype typeOfGrouping, LocalDateTime timeIntervalStart, LocalDateTime timeIntervalEnd, MobilityType mobilityType) {
         this.agents = agents;
@@ -35,8 +42,72 @@ public class Match extends Grouping implements Comparable{
         this.id = ++idCounter;
     }
 
-    public Match(){
+    public Match(List<Agent> agents, boolean isWayToWork) {
+        this.agents = agents;
+        this.isWayToWork = isWayToWork;
+        if (isWayToWork) {
+            agents.forEach(a -> a.setTeamOfAgentTo(this));
+        } else {
+            agents.forEach(a -> a.setTeamOfAgentFrom(this));
+        }
+        Optional<Integer> seats = agents.stream().map(a -> a.getCar().getSeatCount()).max(Integer::compareTo);
+        seats.ifPresent(integer -> {
+            this.maxSeats = Math.max(maxSeats, integer);
+        });
+        this.id = ++idCounter;
+        computeCenter();
+        this.partner = null;
+        this.possDrivers = new ArrayList<>();
+        if(agents.size() == 1) {
+            possDrivers.add(agents.get(0));
+        }
+    }
 
+    public void setPossDrivers(List<Agent> possDrivers) {
+        this.possDrivers = possDrivers;
+    }
+    public void addPossDriver(Agent d) {
+        possDrivers.add(d);
+    }
+
+    public int teamCount() {
+        return agents.size();
+    }
+
+    public int maxSeats() {
+        return maxSeats;
+    }
+
+    public void removeFromTeam(List<Agent> agentList) {
+        this.agents.removeAll(agentList);
+        computeCenter();
+        Optional<Integer> seats = this.agents.stream().map(a -> a.getCar().getSeatCount()).max(Integer::compareTo);
+        seats.ifPresent(Integer -> this.maxSeats = Integer);
+    }
+
+    public void addToTeam(List<Agent> agentList){
+        this.agents.addAll(agentList);
+        computeCenter();
+        if (isWayToWork) {
+            agentList.forEach(a -> a.setTeamOfAgentTo(this));
+        }  else {
+            agentList.forEach(a -> a.setTeamOfAgentFrom(this));
+        }
+
+        Optional<Integer> seats = agentList.stream().map(a -> a.getCar().getSeatCount()).max(Integer::compareTo);
+        seats.ifPresent(integer -> this.maxSeats = Math.max(maxSeats, integer));
+    }
+
+    public List<Agent> getPossDrivers() {
+        return possDrivers;
+    }
+
+    public Match getPartner() {
+        return partner;
+    }
+
+    public void setPartner(Match partner) {
+        this.partner = partner;
     }
 
     public LocalDateTime getTimeIntervalStart() {
@@ -71,7 +142,17 @@ public class Match extends Grouping implements Comparable{
         this.mobilityType = mobilityType;
     }
 
+    public void computeCenter() {
+        centroid = Coordinate.computeCenter(agents.stream().map(Agent::getHomePosition).toList());
+    }
 
+    public Agent getSelectedDriver() {
+        return selectedDriver;
+    }
+
+    public void setSelectedDriver(Agent selectedDriver) {
+        this.selectedDriver = selectedDriver;
+    }
     //TODO
     @Override
     public int compareTo(@NotNull Object o) {
@@ -113,6 +194,10 @@ public class Match extends Grouping implements Comparable{
 
     public long getId() {
         return id;
+    }
+
+    public Coordinate getCentroid() {
+        return centroid;
     }
 
     public void setId(long id) {

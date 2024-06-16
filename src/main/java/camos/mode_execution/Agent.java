@@ -2,9 +2,9 @@ package camos.mode_execution;
 
 import camos.GeneralManager;
 import camos.mode_execution.carmodels.Vehicle;
+import camos.mode_execution.groupings.Match;
 
 public class Agent {
-
     long id;
     boolean willingToUseAlternatives;
     Coordinate homePosition;
@@ -13,21 +13,44 @@ public class Agent {
     long willingToWalkInMeters;
     long willingToRideInMinutes;
     long timeIntervalInMinutes;
+    double distanceToTarget;
+    Match teamOfAgentTo;
+    Match teamOfAgentFrom;
+    double maxTravelTimeInMinutes;
 
 
-    public Agent(long id, Coordinate homePosition, Vehicle car, Request request) {
+    public Agent(long id, Coordinate homePosition, Vehicle car) {
         this.id = id;
         this.homePosition = homePosition;
         this.car = car;
-        this.request = request;
         this.timeIntervalInMinutes = GeneralManager.timeInterval;
         this.willingToWalkInMeters = GeneralManager.acceptedWalkingDistance;
         this.willingToUseAlternatives = true;
+        this.teamOfAgentTo = null;
+        this.teamOfAgentFrom = null;
+        this.maxTravelTimeInMinutes = 60;
     }
 
+    public double getMaxTravelTimeInMinutes() {
+        return maxTravelTimeInMinutes;
+    }
 
-    public Agent(){
+    public Match getTeamOfAgentTo() {
+        return teamOfAgentTo;
+    }
 
+    public Match getTeamOfAgentFrom() {return teamOfAgentFrom;}
+
+    public void setTeamOfAgentTo(Match teamOfAgent) {
+        this.teamOfAgentTo = teamOfAgent;
+    }
+
+    public void setTeamOfAgentFrom(Match teamOfAgent) {
+        this.teamOfAgentFrom = teamOfAgent;
+    }
+
+    public double getDistanceToTarget() {
+        return distanceToTarget;
     }
 
     public long getId() {
@@ -51,7 +74,9 @@ public class Agent {
     }
 
     public void setRequest(Request request) {
+
         this.request = request;
+        distanceToTarget = request.dropOffPosition.computeDistance(this.homePosition);
     }
 
     public Vehicle getCar() {
@@ -62,6 +87,9 @@ public class Agent {
         this.car = car;
     }
 
+    public double clusterFunc() {
+        return Coordinate.distFunc(distanceToTarget);
+    }
     public long getWillingToWalkInMeters() {
         return willingToWalkInMeters;
     }

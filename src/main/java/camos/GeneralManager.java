@@ -18,12 +18,13 @@ import java.util.stream.Stream;
 
 public class GeneralManager {
 
-
+    public static String uniPLZ = "97070";      //PLZ of target location, (wiwi-building)
+    public static double propForCar = 1;
     public static boolean handleLost = true;
     public static boolean plzRadius = false;
     public static double upperRadius;
     public static double lowerRadius;
-    public static double percentOfWillingStudents = 100;
+    public static double percentOfWillingStudents = 90;
 
     public static MobilityType compareMode = MobilityType.EVERYBODYDRIVES; //TODO
     public static Random random = new Random(1234);
@@ -59,10 +60,8 @@ public class GeneralManager {
 
     public static void main(String[] args) throws Exception {
 
-        /*
-        MobilityMode mode = new EverybodyDrives();
+        MobilityMode mode = new SwitchDriver();
         ModeExecutionManager.testMode(mode);
-        */
 
         if(args.length<2){
             System.out.println("Es fehlen Argumente.");

@@ -31,6 +31,7 @@ dependencies {
     implementation("org.geotools:gt-shapefile:27.2")
     implementation("com.graphhopper:jsprit-core:1.9.0-beta.11")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+    implementation("org.jgrapht:jgrapht-core:1.5.2")
 }
 
 tasks.test {
