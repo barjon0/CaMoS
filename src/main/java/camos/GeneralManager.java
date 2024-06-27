@@ -24,7 +24,7 @@ public class GeneralManager {
     public static boolean plzRadius = false;
     public static double upperRadius;
     public static double lowerRadius;
-    public static double percentOfWillingStudents = 90;
+    public static double percentOfWillingStudents = 100;
 
     public static MobilityType compareMode = MobilityType.EVERYBODYDRIVES; //TODO
     public static Random random = new Random(1234);
@@ -60,8 +60,8 @@ public class GeneralManager {
 
     public static void main(String[] args) throws Exception {
 
-        MobilityMode mode = new SwitchDriver();
-        ModeExecutionManager.testMode(mode);
+        //MobilityMode mode = new SwitchDriver();
+        //ModeExecutionManager.testMode(mode);
 
         if(args.length<2){
             System.out.println("Es fehlen Argumente.");

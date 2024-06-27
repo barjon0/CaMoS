@@ -758,7 +758,7 @@ public class RidePooling extends MobilityMode {
         LocalDateTime driveStartTime = CommonFunctionHelper.calculateToUniDriveStartTime(agent.getRequest());
         toUniRide = new Ride(request.getHomePosition(), request.getDropOffPosition(), driveStartTime, request.getFavoredArrivalTime(), agent.getCar(), agent, Requesttype.DRIVETOUNI, agentList);
         fromUniRide = new Ride(request.getDropOffPosition(), request.getHomePosition(), request.getDepartureIntervalStart(), null, agent.getCar(), agent, Requesttype.DRIVEHOME, agentList);
-        fromUniRide.setEndTime(CommonFunctionHelper.getRideEndTime(this.graphHopper,fromUniRide));
+        fromUniRide.setEndTime(CommonFunctionHelper.getRideEndTime(fromUniRide));
 
         agentRides.add(toUniRide);
         agentRides.add(fromUniRide);
@@ -769,7 +769,7 @@ public class RidePooling extends MobilityMode {
         set.add(toUniRide);
         set.add(agent);
 
-        ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(this.graphHopper,toUniRide.getStartPosition(),toUniRide.getEndPosition());
+        ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(toUniRide.getStartPosition(),toUniRide.getEndPosition());
         double distance = path.getDistance()/1000.0;
         long timeInMinutes = path.getTime()/60000L;
         double time = (double) timeInMinutes;
@@ -785,7 +785,7 @@ public class RidePooling extends MobilityMode {
         Set<Object> set2 = new HashSet<>();
         set2.add(fromUniRide);
         set2.add(agent);
-        path = CommonFunctionHelper.getSimpleBestGraphhopperPath(this.graphHopper,toUniRide.getStartPosition(),toUniRide.getEndPosition());
+        path = CommonFunctionHelper.getSimpleBestGraphhopperPath(toUniRide.getStartPosition(),toUniRide.getEndPosition());
         distance = path.getDistance()/1000.0;
         timeInMinutes = path.getTime()/60000L;
         time = (double) timeInMinutes;

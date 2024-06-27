@@ -2,7 +2,14 @@ package camos.mode_execution;
 
 import camos.GeneralManager;
 import camos.mode_execution.carmodels.Vehicle;
+import camos.mode_execution.groupings.Grouping;
 import camos.mode_execution.groupings.Match;
+import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
+import com.graphhopper.GHRequest;
+import com.graphhopper.util.shapes.GHPoint;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class Agent {
     long id;
@@ -14,8 +21,8 @@ public class Agent {
     long willingToRideInMinutes;
     long timeIntervalInMinutes;
     double distanceToTarget;
-    Match teamOfAgentTo;
-    Match teamOfAgentFrom;
+    Grouping teamOfAgentTo;
+    Grouping teamOfAgentFrom;
     double maxTravelTimeInMinutes;
 
 
@@ -28,24 +35,25 @@ public class Agent {
         this.willingToUseAlternatives = true;
         this.teamOfAgentTo = null;
         this.teamOfAgentFrom = null;
-        this.maxTravelTimeInMinutes = 60;
     }
+
+
 
     public double getMaxTravelTimeInMinutes() {
         return maxTravelTimeInMinutes;
     }
 
-    public Match getTeamOfAgentTo() {
+    public Grouping getTeamOfAgentTo() {
         return teamOfAgentTo;
     }
 
-    public Match getTeamOfAgentFrom() {return teamOfAgentFrom;}
+    public Grouping getTeamOfAgentFrom() {return teamOfAgentFrom;}
 
-    public void setTeamOfAgentTo(Match teamOfAgent) {
+    public void setTeamOfAgentTo(Grouping teamOfAgent) {
         this.teamOfAgentTo = teamOfAgent;
     }
 
-    public void setTeamOfAgentFrom(Match teamOfAgent) {
+    public void setTeamOfAgentFrom(Grouping teamOfAgent) {
         this.teamOfAgentFrom = teamOfAgent;
     }
 
@@ -77,6 +85,8 @@ public class Agent {
 
         this.request = request;
         distanceToTarget = request.dropOffPosition.computeDistance(this.homePosition);
+        double mintraveltimeMinutes = CommonFunctionHelper.computeTimeBetweenPoints(homePosition, this.request.dropOffPosition);
+        this.maxTravelTimeInMinutes = (Math.log(mintraveltimeMinutes + 1) / Math.log(1.2)) + mintraveltimeMinutes;
     }
 
     public Vehicle getCar() {
@@ -87,9 +97,6 @@ public class Agent {
         this.car = car;
     }
 
-    public double clusterFunc() {
-        return Coordinate.distFunc(distanceToTarget);
-    }
     public long getWillingToWalkInMeters() {
         return willingToWalkInMeters;
     }

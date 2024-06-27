@@ -1,5 +1,6 @@
 package camos.mode_execution.mobilitymodels;
 
+import camos.mode_execution.groupings.Grouping;
 import com.graphhopper.ResponsePath;
 import camos.mode_execution.*;
 import camos.mode_execution.groupings.Ride;
@@ -123,7 +124,7 @@ public class EverybodyDrives extends MobilityMode {
      */
     public LocalDateTime calculateMetrics(Ride ride){
         Agent agent = ride.getAgents().get(0);
-        ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(this.graphHopper,ride.getStartPosition(),ride.getEndPosition());
+        ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(ride.getStartPosition(),ride.getEndPosition());
         double distance = path.getDistance()/1000.0;
         long timeInMinutes = path.getTime()/60000L;
         double time = (double) timeInMinutes;

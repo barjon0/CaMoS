@@ -29,7 +29,7 @@ public class AgentManager {
                 InputStream is = new FileInputStream(filePathToAllAgents);
                 String jsonTxt = IOUtils.toString(is, "UTF-8");
                 org.json.JSONObject json = new org.json.JSONObject(jsonTxt);
-                org.json.JSONArray array = (org.json.JSONArray) json.get("postcodes");
+                org.json.JSONArray array = json.getJSONArray("postcodes");
 
                 for(Object postcodeObj : array){
                     org.json.JSONObject postcodeObject = (org.json.JSONObject) postcodeObj;

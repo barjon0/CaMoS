@@ -1,9 +1,12 @@
 package camos.mode_execution.groupings;
 
+import camos.GeneralManager;
 import camos.mode_execution.Agent;
 import camos.mode_execution.Coordinate;
 import camos.mode_execution.Requesttype;
 import camos.mode_execution.carmodels.Vehicle;
+import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
+import com.graphhopper.ResponsePath;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -21,6 +24,8 @@ public class Ride extends Grouping {
 
     LocalDateTime endTime;
 
+    double distanceCovered;
+
 
     public Ride(){
 
@@ -37,6 +42,15 @@ public class Ride extends Grouping {
         this.agents = agents;
         this.stops = new ArrayList<>();
         this.id = ++idcounter;
+        if(typeOfGrouping == Requesttype.DRIVETOUNI) {
+            for(Agent a : agents) {
+                a.setTeamOfAgentTo(this);
+            }
+        } else {
+            for(Agent a : agents) {
+                a.setTeamOfAgentFrom(this);
+            }
+        }
     }
 
 
@@ -62,6 +76,14 @@ public class Ride extends Grouping {
 
     public void setStops(List<Stop> stops) {
         this.stops = stops;
+    }
+
+    public double getDistanceCovered() {
+        return distanceCovered;
+    }
+
+    public void setDistanceCovered(double distanceCovered) {
+        this.distanceCovered = distanceCovered;
     }
 
     public long getId() {

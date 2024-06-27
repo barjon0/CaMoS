@@ -1,3 +1,7 @@
+// Define the path to the cplex folder here, before bin folder
+val cplexPath = "C:/Program Files/IBM/ILOG/CPLEX_Studio2211/cplex/"
+
+
 plugins {
     id("java")
     id("com.github.johnrengelman.shadow") version "7.1.2"
@@ -32,6 +36,8 @@ dependencies {
     implementation("com.graphhopper:jsprit-core:1.9.0-beta.11")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation("org.jgrapht:jgrapht-core:1.5.2")
+    implementation(files(cplexPath + "lib/cplex.jar"))
+
 }
 
 tasks.test {
@@ -41,5 +47,6 @@ tasks.test {
 
 
 application {
+    applicationDefaultJvmArgs = setOf("-Djava.library.path=$cplexPath" + "bin/x64_win64")
     mainClass.set("mobilitysimulation.GeneralManager")
 }

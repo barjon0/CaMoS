@@ -96,7 +96,7 @@ public class ModeExecutionManager {
 
     public static MobilityMode findMode(String modeName){
         try {
-            Class<?> modeClass = Class.forName("mobilitysimulation.simulation.mobilitymodels."+ ModeExecutionManager.modeValues.get(modeName).getString("class name"));
+            Class<?> modeClass = Class.forName("camos.mode_execution.mobilitymodels."+ ModeExecutionManager.modeValues.get(modeName).getString("class name"));
             Constructor<?> ctor = modeClass.getConstructor();
             return (MobilityMode) ctor.newInstance();
         } catch (Exception e) {
@@ -136,31 +136,34 @@ public class ModeExecutionManager {
 
 
     public static void setGeneralManagerAttributes(org.json.JSONObject json){
-        GeneralManager.busSeatCount = json.getInt("bus seat count");
-        GeneralManager.busWithDriver = json.getBoolean("busWithDriver");
-        GeneralManager.busCount = json.getInt("bus count");
-        GeneralManager.busConsumptionPerKm = json.getDouble("busConsumptionPerKm");
-        GeneralManager.busCo2EmissionPerLiter = json.getDouble("busCo2EmissionPerLiter");
-        GeneralManager.busPricePerLiter = json.getDouble("busPricePerLiter");
-        GeneralManager.studentCarSeatCount = json.getInt("student car seat count");
-        GeneralManager.studentCarConsumptionPerKm = json.getDouble("studentCarConsumptionPerKm");
-        GeneralManager.studentCarCo2EmissionPerLiter = json.getDouble("studentCarCo2EmissionPerLiter");
-        GeneralManager.studentCarPricePerLiter = json.getDouble("studentCarPricePerLiter");
-        GeneralManager.stopTime = json.getLong("stop time");
-        GeneralManager.timeInterval = json.getLong("time interval");
-        GeneralManager.acceptedWalkingDistance = json.getLong("accepted walking distance");
-        GeneralManager.acceptedDrivingTime = json.getString("accepted ridesharing time");
-        GeneralManager.acceptedRidepoolingTime = json.getString("accepted ridepooling time");
-        GeneralManager.centralCoordinate = new Coordinate(json.getJSONObject("centralCoordinate").getDouble("longitude"),json.getJSONObject("centralCoordinate").getDouble("latitude"));
-        GeneralManager.countOfGroups = json.getInt("countOfGroups");
-        GeneralManager.radiusToExclude = json.getDouble("radiusToExclude");
-        if(json.keySet().contains("percentOfWillingStudents")){
-            GeneralManager.percentOfWillingStudents = json.getDouble("percentOfWillingStudents");
-        }
+        GeneralManager.busSeatCount = json.optInt("bus seat count");
+        GeneralManager.busWithDriver = json.optBoolean("busWithDriver");
+        GeneralManager.busCount = json.optInt("bus count");
+        GeneralManager.busConsumptionPerKm = json.optDouble("busConsumptionPerKm");
+        GeneralManager.busCo2EmissionPerLiter = json.optDouble("busCo2EmissionPerLiter");
+        GeneralManager.busPricePerLiter = json.optDouble("busPricePerLiter");
+
+        GeneralManager.acceptedWalkingDistance = json.optLong("accepted walking distance");
+
+        GeneralManager.studentCarSeatCount = json.optInt("student car seat count");
+        GeneralManager.studentCarConsumptionPerKm = json.optDouble("studentCarConsumptionPerKm");
+        GeneralManager.studentCarCo2EmissionPerLiter = json.optDouble("studentCarCo2EmissionPerLiter");
+        GeneralManager.studentCarPricePerLiter = json.optDouble("studentCarPricePerLiter");
+        GeneralManager.stopTime = json.optLong("stop time");
+        GeneralManager.timeInterval = json.optLong("time interval");
+
+        GeneralManager.acceptedDrivingTime = json.optString("accepted ridesharing time");
+        GeneralManager.acceptedRidepoolingTime = json.optString("accepted ridepooling time");
+        GeneralManager.centralCoordinate = new Coordinate(json.optJSONObject("centralCoordinate").getDouble("longitude"),json.optJSONObject("centralCoordinate").getDouble("latitude"));
+        GeneralManager.countOfGroups = json.optInt("countOfGroups");
+        GeneralManager.radiusToExclude = json.optDouble("radiusToExclude");
+
+        GeneralManager.percentOfWillingStudents = json.optDouble("percentOfWillingStudents");
+
 
         uniPositions = new ArrayList<>();
         Map<String,Coordinate> postcodeToCoordinate = new HashMap<>();
-        org.json.JSONObject postcodeMapping = json.getJSONObject("postcode mapping");
+        org.json.JSONObject postcodeMapping = json.optJSONObject("postcode mapping");
         for(String postcode : postcodeMapping.keySet()){
             org.json.JSONObject postcodeJson = postcodeMapping.getJSONObject(postcode);
             Coordinate uniCoordinate = new Coordinate(postcodeJson.getDouble("longitude"),postcodeJson.getDouble("latitude"));

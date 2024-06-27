@@ -1,85 +1,80 @@
 package camos.mode_execution.mobilitymodels;
 
+import camos.GeneralManager;
 import camos.mode_execution.Agent;
+import camos.mode_execution.Coordinate;
+import camos.mode_execution.Requesttype;
+import camos.mode_execution.carmodels.Vehicle;
 import camos.mode_execution.groupings.Match;
 import camos.mode_execution.groupings.Ride;
+import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
+import camos.mode_execution.mobilitymodels.modehelpers.IntervalGraph;
 import camos.mode_execution.mobilitymodels.modehelpers.MaximumMatching;
-import com.graphhopper.GHRequest;
-import com.graphhopper.GHResponse;
-import com.graphhopper.util.shapes.GHPoint;
+import com.graphhopper.ResponsePath;
+import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.DefaultUndirectedGraph;
 
+import java.io.File;
+import java.io.PrintWriter;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static java.util.Comparator.comparingDouble;
 
-public class SwitchDriver extends MobilityMode{
+public class SwitchDriver extends SDCTSP {
+
+    List<Match> resultMatch;
+
+    public SwitchDriver() {
+        super();
+        this.resultMatch = new ArrayList<>();
+    }
+
     @Override           //receives list of agents with requests of same day
     public void prepareMode(List<Agent> agents) {
-        List<List<Agent>> bubblesTo = new ArrayList<>();
-        List<List<Agent>> bubblesFrom = new ArrayList<>();
-
-        agents = agents.stream().sorted(Comparator.comparing(a -> a.getRequest().getFavoredArrivalTime())).collect(Collectors.toList());
-        LocalDateTime latestTime = LocalDateTime.MIN;
-        int i = -1;
-        for (Agent agent : agents) {
-            LocalDateTime arrivTime = roundDownTo30(agent.getRequest().getFavoredArrivalTime());
-            if (arrivTime.isAfter(latestTime)) {
-                latestTime = arrivTime;
-                bubblesTo.add(new ArrayList<>());
-                i++;
-            }
-            bubblesTo.get(i).add(agent);
-        }
-
-        agents = agents.stream().sorted(Comparator.comparing(a -> a.getRequest().getFavoredDepartureTime())).collect(Collectors.toList());
-        latestTime = LocalDateTime.MIN;
-        i = -1;
-        for (Agent agent : agents) {
-            LocalDateTime leavTime = roundUpTo30(agent.getRequest().getFavoredDepartureTime());
-            if (leavTime.isAfter(latestTime)) {
-                latestTime = leavTime;
-                bubblesFrom.add(new ArrayList<>());
-                i++;
-            }
-            bubblesFrom.get(i).add(agent);
-        }
+        this.agents = agents;
+        //make greedy time bubbles
+        List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs = IntervalGraph.buildIntervalGraph(agents);
+        List<List<Agent>> bubblesTo = IntervalGraph.cliqueCover(graphs.get(0));
+        List<List<Agent>> bubblesFrom = IntervalGraph.cliqueCover(graphs.get(1));
 
         //make Cluster call
         List<Match> clustersTo = new ArrayList<>();
         List<Match> clustersFrom = new ArrayList<>();
-        bubblesTo.forEach(bubble -> clustersTo.addAll(makeCluster(bubble, true)));
-        bubblesFrom.forEach(bubble -> clustersFrom.addAll(makeCluster(bubble, false)));
+        bubblesTo.forEach(bubble -> clustersTo.addAll(makeCluster(bubble, Requesttype.DRIVETOUNI)));
+        bubblesFrom.forEach(bubble -> clustersFrom.addAll(makeCluster(bubble, Requesttype.DRIVEHOME)));
 
         List<List<Match>> matching = MaximumMatching.getMatching(clustersTo, clustersFrom);
-        List<List<Match>> finMatching = new ArrayList<>(matching);
 
-        matching.addAll(repairRest(clustersTo, true));
-        matching.addAll(repairRest(clustersFrom, false));
+        matching.addAll(repairRest(clustersTo, Requesttype.DRIVETOUNI));
+        matching.addAll(repairRest(clustersFrom, Requesttype.DRIVEHOME));
 
         //find driver
-        finMatching.forEach(tuple -> {
+        matching.forEach(tuple -> {
             List<Agent> intersect = tuple.get(0).getPossDrivers().stream().filter(tuple.get(1).getPossDrivers()::contains).toList();
             Optional<Agent> driver = intersect.stream().max(comparingDouble(Agent::getDistanceToTarget));
-            tuple.get(0).setSelectedDriver(driver.get());
-            tuple.get(1).setSelectedDriver(driver.get());
+            tuple.get(0).setDriver(driver.get());
+            tuple.get(1).setDriver(driver.get());
         });
+        resultMatch = new ArrayList<>(matching.stream()
+                .flatMap(List::stream)
+                .toList());
     }
 
-    private List<List<Match>> repairRest(List<Match> clusters, boolean isToWork) {
+    private List<List<Match>> repairRest(List<Match> clusters, Requesttype isToWork) {
         List<List<Match>> result = new ArrayList<>();
 
         clusters.stream().filter(m -> m.getPartner() == null).forEach(m1 -> {
             int maxSize = 0;
             Match opposingMatchMax = null;
             List<Agent> possList = new ArrayList<>();
-            for (Agent a: m1.getPossDrivers()) {
+            for (Agent a : m1.getPossDrivers()) {
                 Match oppMatch;
-                if (isToWork) {
-                    oppMatch = a.getTeamOfAgentFrom();
+                if (isToWork == Requesttype.DRIVETOUNI) {
+                    oppMatch = (Match) a.getTeamOfAgentFrom();
                 } else {
-                    oppMatch = a.getTeamOfAgentTo();
+                    oppMatch = (Match) a.getTeamOfAgentTo();
                 }
                 List<Agent> intersect = m1.getAgents().stream().filter(oppMatch.getAgents()::contains).toList();
                 if (intersect.size() > maxSize) {
@@ -89,7 +84,7 @@ public class SwitchDriver extends MobilityMode{
                 }
             }
             opposingMatchMax.removeFromTeam(possList);
-            Match nextMatch = new Match(possList, !isToWork);
+            Match nextMatch = new Match(possList, isToWork.getOpposite());
             possList.forEach(a -> {
                 if (m1.getPossDrivers().contains(a)) {
                     nextMatch.addPossDriver(a);
@@ -105,16 +100,7 @@ public class SwitchDriver extends MobilityMode{
         return result;
     }
 
-    private LocalDateTime roundDownTo30(LocalDateTime dateTime) {
-        int minutesMinus = dateTime.getMinute() % 30;
-        return dateTime.minusMinutes(minutesMinus);
-    }
-    private LocalDateTime roundUpTo30(LocalDateTime dateTime) {
-        int minutesPlus = dateTime.getMinute() % 30;
-        return dateTime.plusMinutes(30 - minutesPlus);
-    }
-
-    private List<Match> makeCluster(List<Agent> agents, boolean isToWork) {
+    private List<Match> makeCluster(List<Agent> agents, Requesttype isToWork) {
 
         List<Match> clusters = new ArrayList<>(agents.stream().map(a -> {
             List<Agent> aList = new ArrayList<>();
@@ -125,7 +111,7 @@ public class SwitchDriver extends MobilityMode{
         List<List<Object>> potential = new ArrayList<>();
         //compute distances between each cluster, add trigram (cluster1, cluster2, distance)
         for (int i = 0; i < clusters.size(); i++) {
-            for (int j = i+1; j < clusters.size(); j++) {
+            for (int j = i + 1; j < clusters.size(); j++) {
                 Match m1 = clusters.get(i);
                 Match m2 = clusters.get(j);
                 if (checkIfSuitable(m1, m2)) {
@@ -151,15 +137,15 @@ public class SwitchDriver extends MobilityMode{
                 clusters.remove(m2);
                 m1.setPossDrivers(feasibleDrivers);
                 List<List<Object>> changedPot = new ArrayList<>();
-                while(count < potential.size()) {
+                while (count < potential.size()) {
                     Match checkM1 = (Match) potential.get(count).get(0);
                     Match checkM2 = (Match) potential.get(count).get(1);
                     if (checkM1 == m1 || checkM1 == m2 || checkM2 == m1 || checkM2 == m2) {
-                        if(checkM1 == m2) {
+                        if (checkM1 == m2) {
                             potential.get(count).set(0, m1);
                             checkM1 = m1;
                         }
-                        if(checkM2 == m2) {
+                        if (checkM2 == m2) {
                             potential.get(count).set(1, m1);
                             checkM2 = m1;
                         }
@@ -179,83 +165,7 @@ public class SwitchDriver extends MobilityMode{
 
         return clusters;
     }
-/*
-    private List<Match> divideTilDoable(Match match) {
-        List<Match> res = new ArrayList<>();
-        if (checkIfFeasible(match)) {
-            res.add(match);
-        } else {
-            List<Agent> agentList = match.getAgents();
-            double maxDist = 0;
-            List<Agent> pair = new ArrayList<>();
-            for (int i = 0; i < agentList.size(); i++) {
-                for (int j = i + 1; j < agentList.size(); j++) {        //Driver zum aufsplitten müssen zusammen kapzität für alle haben, und max Distanz davon
-                    double possDist = agentList.get(i).getHomePosition().computeDistance(agentList.get(j).getHomePosition());
-                    if (((agentList.get(i).getCar().getSeatCount() + agentList.get(j).getCar().getSeatCount()) >= match.teamCount()) &&
-                            possDist >= maxDist) {
-                        List<Agent> nextPair = new ArrayList<>();
-                        maxDist = possDist;
-                        nextPair.add(agentList.get(i));
-                        nextPair.add(agentList.get(j));
-                        pair = nextPair;
-                    }
-                }
-            }
-            Agent firstOne = pair.get(0);
-            Agent secondOne = pair.get(1);
-            Match m1 = new Match(firstOne, match.isWayToWork());
-            Match m2 = new Match(secondOne, match.isWayToWork());
-            agentList = agentList.stream().filter(a -> a != firstOne && a != secondOne)
-                    .sorted(comparingDouble(a -> Math.min(a.getHomePosition().computeDistance(firstOne.getHomePosition())
-                            , a.getHomePosition().computeDistance(secondOne.getHomePosition())))).toList();
-            for(Agent a : agentList) {
-                if (a.getHomePosition().computeDistance(m1.getCentroid())
-                        < a.getHomePosition().computeDistance(m2.getCentroid())) {
-                    if (m1.teamCount() + 1 <= Math.max(m1.maxSeats(), a.getCar().getSeatCount())) {
-                        List<Agent> addition = new ArrayList<>();
-                        addition.add(a);
-                        m1.addToTeam(addition);
-                    } else {
-                        List<Agent> addition = new ArrayList<>();
-                        addition.add(a);
-                        m2.addToTeam(addition);
-                    }
-                } else {
-                    if (m2.teamCount() + 1 <= Math.max(m2.maxSeats(), a.getCar().getSeatCount())) {
-                        List<Agent> addition = new ArrayList<>();
-                        addition.add(a);
-                        m2.addToTeam(addition);
-                    } else {
-                        List<Agent> addition = new ArrayList<>();
-                        addition.add(a);
-                        m1.addToTeam(addition);
-                    }
-                }
-            }
-            res.addAll(divideTilDoable(m1));
-            res.addAll(divideTilDoable(m2));
-        }
-        return res;
-    }
-*/
-    private List<List<Agent>> getPermut(List<Agent> agents) {
-        List<List<Agent>> res = new ArrayList<>();
-        if (agents.size() == 1) {
-            List<Agent> only = new ArrayList<>();
-            only.add(agents.get(0));
-            res.add(only);
-            return res;
-        }
-        for (int i = 0; i < agents.size(); i++) {
-            int finalI = i;
-            List<Agent> slice = agents.stream().filter(a -> a != agents.get(finalI)).toList();
-            for (List<Agent> residual : getPermut(slice)) {
-                residual.add(0, agents.get(i));
-                res.add(residual);
-            }
-        }
-        return res;
-    }
+
 
     private List<Agent> getFeasibleDrivers(Match match1, Match match2) {
         //checks if there is a permutation for which no constraints are broken, add poss. Driver to result
@@ -265,50 +175,14 @@ public class SwitchDriver extends MobilityMode{
         List<Agent> possDriverList = new ArrayList<>(match1.getPossDrivers());
         possDriverList.addAll(match2.getPossDrivers());
         possDriverList = possDriverList.stream().filter(a -> a.getCar().getSeatCount() >= possList.size()).toList();
+
         for (Agent driver : possDriverList) {
-            List<List<Agent>> permutations = getPermut(possList.stream().filter(a -> a != driver).toList());
+            List<List<Agent>> permutations = CommonFunctionHelper.getPermut(possList.stream().filter(a -> a != driver).toList());
             for (List<Agent> permut : permutations) {
                 List<Agent> permuList = new ArrayList<>(permut);
                 permuList.add(0, driver);
-                List<GHPoint> pointList = new ArrayList<>();
-                for (Agent pass : permut) {
-                    pointList.add(new GHPoint(pass.getHomePosition().getLatitude(), pass.getHomePosition().getLongitude()));
-                }
-                pointList.add(new GHPoint(driver.getRequest().getDropOffPosition().getLatitude(), driver.getRequest().getDropOffPosition().getLongitude()));
-                double[] totalTraveltime = new double[permuList.size()];
-                /*
-                if (match1.isWayToWork()) {
-                    Optional<LocalDateTime> earliest = permuList.stream().map(a -> a.getRequest().getArrivalIntervalEnd()).min(LocalDateTime::compareTo);
-                    for (int i = 0; i < permuList.size(); i++) {
-                        totalTraveltime[i] = (double) Duration.between(earliest.get(), permuList.get(i).getRequest().getArrivalIntervalEnd()).toMinutes();
-                    }
-                } else {
-                    Optional<LocalDateTime> latest = permuList.stream().map(a -> a.getRequest().getDepartureIntervalStart()).max(LocalDateTime::compareTo);
-                    for (int i = 0; i < permuList.size(); i++) {
-                        totalTraveltime[i] = (double) Duration.between(latest.get(), permuList.get(i).getRequest().getDepartureIntervalStart()).toMinutes();
-                    }
-                }
-                */
-                for (int i = 0; i < pointList.size() - 1; i++) {
-                    List<GHPoint> twoPoints = new ArrayList<>();
-                    twoPoints.add(pointList.get(i));
-                    twoPoints.add(pointList.get(i+1));
-                    GHRequest req = new GHRequest(twoPoints);
-                    req.setProfile("car");
-                    GHResponse resp = graphHopper.route(req);
-                    double timeSec = resp.getBest().getInstructions().get(0).getTime();
-                    for (int j = 0; j < i + 1; j++) {
-                        totalTraveltime[j] = totalTraveltime[j] + (timeSec / 60) ;
-                    }
-                }
-                boolean hurt = false;
-                for (int i = 0; i < permuList.size(); i++) {
-                    if(totalTraveltime[i] > permuList.get(i).getMaxTravelTimeInMinutes()) {
-                        hurt = true;
-                        break;
-                    }
-                }
-                if(!hurt) {
+                Long time = CommonFunctionHelper.checkFeasTime(permuList);
+                if (time != null) {
                     result.add(driver);
                     break;
                 }
@@ -323,26 +197,90 @@ public class SwitchDriver extends MobilityMode{
 
     @Override
     public void startMode() {
+        //computes concrete Routes for found Matches/Teams
+        for (Match m : resultMatch) {
+            List<Agent> residual = m.getAgents().stream().filter(d -> d != m.getDriver()).toList();
+            long shortestDriveTime = 999999999;
+            List<Agent> bestOrder = null;
+            List<List<Agent>> permutations;
+            if (m.getAgents().size() != 1) {
+                permutations = CommonFunctionHelper.getPermut(residual);
+            } else {
+                permutations = new ArrayList<>();
+                permutations.add(new ArrayList<>());
+            }
+                for (List<Agent> permut : permutations) {
+                    permut.add(0, m.getDriver());
+                    Long driveTimeInMinutes = CommonFunctionHelper.checkFeasTime(permut);
+                    if (driveTimeInMinutes != null && driveTimeInMinutes < shortestDriveTime) {
+                        shortestDriveTime = driveTimeInMinutes;
+                        bestOrder = permut;
+                    }
+                }
+                if (bestOrder == null) {
+                    throw new IllegalStateException("No order has been found at later stage");
+                }
 
-    }
+            Coordinate startPosition;
+            Coordinate destination;
+            LocalDateTime startTime;
+            LocalDateTime endTime;
+            Vehicle vehicle;
+            Requesttype req;
+            if (m.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
+                startPosition = m.getDriver().getHomePosition();
+                destination = m.getDriver().getRequest().getDropOffPosition();
+                endTime = CommonFunctionHelper
+                        .calculateInterval(m.getAgents(), m.getTypeOfGrouping()).get(0);
 
-    @Override
-    public String getName() {
-        return null;
-    }
 
-    @Override
-    public boolean checkIfConstraintsAreBroken(List<Agent> agents) {
-        return false;
+                startTime = endTime.minusMinutes(shortestDriveTime);
+                vehicle = m.getDriver().getCar();
+                req = m.getTypeOfGrouping();
+
+            } else {
+                startPosition = m.getDriver().getRequest().getDropOffPosition();
+                destination = m.getDriver().getHomePosition();
+                startTime = CommonFunctionHelper
+                        .calculateInterval(m.getAgents(), m.getTypeOfGrouping()).get(0);
+                endTime = startTime.plusMinutes(shortestDriveTime);
+                vehicle = m.getDriver().getCar();
+                req = m.getTypeOfGrouping();
+                Collections.reverse(bestOrder);
+            }
+            Ride r = new Ride(startPosition, destination, startTime, endTime, vehicle, m.getDriver(), req, bestOrder);
+            computeStops(r);
+            rides.add(r);
+
+        }
     }
 
     @Override
     public void writeResultsToFile() {
+        calculateMetrics();
+        List<String> dataSingle = createSingleData();
+        List<String> dataAccum = createAccumData();
 
+        File csvOutputFile = new File("accumResultsSwitch.csv");
+        try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
+            for(String data : dataAccum){
+                pw.println(data);
+            }
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+        File csvOutputFile2 = new File("singleResultsSwitch.csv");
+        try (PrintWriter pw = new PrintWriter(csvOutputFile2)) {
+            for(String data : dataSingle){
+                pw.println(data);
+            }
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
     }
 
     @Override
-    public List<Ride> returnFinishedRides() {
-        return null;
+    public String getName() {
+        return "SwitchDriver";
     }
 }

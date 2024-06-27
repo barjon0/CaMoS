@@ -563,7 +563,7 @@ public class RideSharing extends MobilityMode {
                 long minutesBetweenAgentPreferredArrivalAndMatchInterval = ChronoUnit.MINUTES.between(match.getDriver().getRequest().getFavoredArrivalTime(), getStartTimeForNoStops(match, match.getDriver().getRequest().getFavoredArrivalTime()));
                 rideEndTime = minutesBetweenAgentPreferredArrivalAndMatchInterval < 0 ? rideEndTime.minusMinutes(Math.abs(minutesBetweenAgentPreferredArrivalAndMatchInterval)) : rideEndTime.plusMinutes(minutesBetweenAgentPreferredArrivalAndMatchInterval);
             } else {
-                ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(this.graphHopper,match.getStartPosition(),match.getEndPosition());
+                ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(match.getStartPosition(),match.getEndPosition());
                 long timeInMinutes = path.getTime()/60000L;
 
                 rideEndTime = match.getDriver().getRequest().getFavoredDepartureTime().plusMinutes(timeInMinutes);
@@ -572,7 +572,7 @@ public class RideSharing extends MobilityMode {
             }
             ride = new Ride(match.getStartPosition(), match.getEndPosition(), matchToStartTime.get(match), rideEndTime, match.getDriver().getCar(), match.getDriver(), match.getTypeOfGrouping(), match.getAgents());
             if (ride.getEndTime() == null) {
-                ride.setEndTime(CommonFunctionHelper.getRideEndTime(graphHopper,ride));
+                ride.setEndTime(CommonFunctionHelper.getRideEndTime(ride));
             }
         } else {
             List<VehicleRoute> routes = (List<VehicleRoute>) solution.getRoutes();
@@ -763,7 +763,7 @@ public class RideSharing extends MobilityMode {
         LocalDateTime oldTimeIntervalEnd = match.getTimeIntervalEnd();
         if ((match.getTypeOfGrouping() == Requesttype.DRIVEHOME && match.getStartPosition().equals(dropOffCoordinate)) || (match.getTypeOfGrouping() == Requesttype.DRIVETOUNI && match.getEndPosition().equals(dropOffCoordinate))) {
             if (match.getDifferentStops().isEmpty() && !match.getTimeIntervalStart().isAfter(end) && !match.getTimeIntervalEnd().isBefore(start)) {
-                return CommonFunctionHelper.getSimpleBestGraphhopperPath(this.graphHopper,match.getStartPosition(),match.getEndPosition()).getTime() <= newAgent.getWillingToRideInMinutes();
+                return CommonFunctionHelper.getSimpleBestGraphhopperPath(match.getStartPosition(),match.getEndPosition()).getTime() <= newAgent.getWillingToRideInMinutes();
             }
             sameStopAsDriver = true;
             setNewInterval(match, start, end, dropOffCoordinate);
@@ -1011,7 +1011,7 @@ public class RideSharing extends MobilityMode {
 
     public void handleLostPerson(Request request) {
         if(GeneralManager.handleLost){
-            ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(this.graphHopper,request.getDropOffPosition(),request.getHomePosition());
+            ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(request.getDropOffPosition(),request.getHomePosition());
             long timeInMinutes = path.getTime()/60000L;
 
             Ride ride = new Ride(request.getDropOffPosition(),request.getHomePosition(),request.getDepartureIntervalEnd(),request.getDepartureIntervalEnd().plusMinutes(timeInMinutes),new StandInVehicle(),null,Requesttype.DRIVEHOME,List.of(request.getAgent()));

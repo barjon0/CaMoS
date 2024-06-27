@@ -18,19 +18,13 @@ public class Match extends Grouping implements Comparable{
     MobilityType mobilityType;
     LocalDateTime timeIntervalStart;
     LocalDateTime timeIntervalEnd;
-
-    boolean isWayToWork;
-    Agent selectedDriver;
-
     Match partner;
     int maxSeats;
     Coordinate centroid;
-
     List<Agent> possDrivers;
 
     public Match(List<Agent> agents, Map<Coordinate,String> differentStops, Agent driver, Vehicle vehicle, Coordinate startPosition, Coordinate endPosition, Requesttype typeOfGrouping, LocalDateTime timeIntervalStart, LocalDateTime timeIntervalEnd, MobilityType mobilityType) {
         this.agents = agents;
-        this.differentStops = differentStops;
         this.driver = driver;
         this.vehicle = vehicle;
         this.startPosition = startPosition;
@@ -42,10 +36,10 @@ public class Match extends Grouping implements Comparable{
         this.id = ++idCounter;
     }
 
-    public Match(List<Agent> agents, boolean isWayToWork) {
+    public Match(List<Agent> agents, Requesttype isWayToWork) {
         this.agents = agents;
-        this.isWayToWork = isWayToWork;
-        if (isWayToWork) {
+        this.typeOfGrouping = isWayToWork;
+        if (isWayToWork == Requesttype.DRIVETOUNI) {
             agents.forEach(a -> a.setTeamOfAgentTo(this));
         } else {
             agents.forEach(a -> a.setTeamOfAgentFrom(this));
@@ -88,7 +82,7 @@ public class Match extends Grouping implements Comparable{
     public void addToTeam(List<Agent> agentList){
         this.agents.addAll(agentList);
         computeCenter();
-        if (isWayToWork) {
+        if (this.typeOfGrouping == Requesttype.DRIVETOUNI) {
             agentList.forEach(a -> a.setTeamOfAgentTo(this));
         }  else {
             agentList.forEach(a -> a.setTeamOfAgentFrom(this));
@@ -144,14 +138,6 @@ public class Match extends Grouping implements Comparable{
 
     public void computeCenter() {
         centroid = Coordinate.computeCenter(agents.stream().map(Agent::getHomePosition).toList());
-    }
-
-    public Agent getSelectedDriver() {
-        return selectedDriver;
-    }
-
-    public void setSelectedDriver(Agent selectedDriver) {
-        this.selectedDriver = selectedDriver;
     }
     //TODO
     @Override

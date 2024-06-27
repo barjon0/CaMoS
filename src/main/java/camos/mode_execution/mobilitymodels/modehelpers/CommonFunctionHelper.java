@@ -34,6 +34,8 @@ import org.apache.commons.lang3.StringUtils;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import static camos.mode_execution.ModeExecutionManager.graphHopper;
+
 /**
  * A class for grouping helpful functions for the mobility modes.
  */
@@ -42,12 +44,80 @@ public class CommonFunctionHelper {
     /**
      * Get the best graphhopper path for a start and end
      *
-     * @param  graphHopper     the GraphHopper instance for calculating the best path
-     * @param  start           the ride to calculate the best path for
-     * @param  end             the ride to calculate the best path for
+     * @param  //graphHopper     the GraphHopper instance for calculating the best path
+     * @param  //start           the ride to calculate the best path for
+     * @param  //end             the ride to calculate the best path for
      * @return                 the best path
+     *
+     *
      */
-    public static ResponsePath getSimpleBestGraphhopperPath(GraphHopper graphHopper, Coordinate start, Coordinate end){
+
+    public static List<LocalDateTime> getTimeInterval(Agent a, Requesttype isToWork) {
+        List<LocalDateTime> interval = new ArrayList<>();
+        if (isToWork == Requesttype.DRIVETOUNI) {
+            interval.add(a.getRequest().getArrivalIntervalStart());
+            interval.add(a.getRequest().getArrivalIntervalEnd());
+        } else {
+            interval.add(a.getRequest().getDepartureIntervalStart());
+            interval.add(a.getRequest().getDepartureIntervalEnd());
+        }
+        return interval;
+    }
+    public static List<LocalDateTime> calculateInterval(List<Agent> members, Requesttype isToWork) {
+        if (members.size() == 2) {
+            List<LocalDateTime> tupleFirst = getTimeInterval(members.get(0), isToWork);
+            List<LocalDateTime> tupleSecond = getTimeInterval(members.get(1), isToWork);
+            return calcDoub(tupleFirst, tupleSecond);
+        }
+        if (members.size() == 1) {
+            return getTimeInterval(members.get(0), isToWork);
+        }
+        List<LocalDateTime> tuple1 = calculateInterval(members.subList(0, members.size() / 2), isToWork);
+        List<LocalDateTime> tuple2 = calculateInterval(members.subList((members.size() / 2) + 1, members.size()), isToWork);
+        return calcDoub(tuple1, tuple2);
+    }
+
+    public static List<LocalDateTime> calcDoub(List<LocalDateTime> tupleFirst, List<LocalDateTime> tupleSecond) {
+        List<LocalDateTime> result = new ArrayList<>();
+        if (tupleFirst == null || tupleSecond == null) {
+            return null;
+        }
+        if (tupleFirst.get(0).isBefore(tupleFirst.get(0))) {
+            result.add(tupleSecond.get(0));
+        } else {
+            result.add(tupleFirst.get(0));
+        }
+        if (tupleFirst.get(1).isBefore(tupleFirst.get(1))) {
+            result.add(tupleFirst.get(1));
+        } else {
+            result.add(tupleSecond.get(1));
+        }
+        if (result.get(0).isBefore(result.get(1)) || result.get(0).isEqual(result.get(1))) {
+            return result;
+        } else {
+            return null;
+        }
+    }
+
+    public static List<List<Agent>> getPermut(List<Agent> agents) {
+        List<List<Agent>> res = new ArrayList<>();
+        if (agents.size() == 1) {
+            List<Agent> only = new ArrayList<>();
+            only.add(agents.get(0));
+            res.add(only);
+            return res;
+        }
+        for (int i = 0; i < agents.size(); i++) {
+            int finalI = i;
+            List<Agent> slice = agents.stream().filter(a -> a != agents.get(finalI)).toList();
+            for (List<Agent> residual : getPermut(slice)) {
+                residual.add(0, agents.get(i));
+                res.add(residual);
+            }
+        }
+        return res;
+    }
+    public static ResponsePath getSimpleBestGraphhopperPath(Coordinate start, Coordinate end){
         GHPoint ghPointStart = new GHPoint(start.getLatitude(),start.getLongitude());
         GHPoint ghPointEnd = new GHPoint(end.getLatitude(),end.getLongitude());
         GHRequest ghRequest = new GHRequest(ghPointStart,ghPointEnd).setProfile("car").setLocale(Locale.GERMANY);
@@ -55,6 +125,23 @@ public class CommonFunctionHelper {
         return graphHopper.route(ghRequest).getBest();
     }
 
+    public static Long checkFeasTime(List<Agent> members) {
+        List<Coordinate> coords = new ArrayList<>(members.stream().map(Agent::getHomePosition).toList());
+        coords.add(members.get(0).getRequest().getDropOffPosition());
+        long[] totalTraveltime = new long[members.size()];
+        for (int i = 0; i < coords.size() - 1; i++) {
+            long timeMin = computeTimeBetweenPoints(coords.get(i), coords.get(i + 1));
+            for (int j = 0; j < i + 1; j++) {
+                totalTraveltime[j] = (totalTraveltime[j] + timeMin + GeneralManager.stopTime);
+            }
+        }
+        for (int i = 0; i < members.size(); i++) {
+            if(totalTraveltime[i] > members.get(i).getMaxTravelTimeInMinutes()) {
+                return null;
+            }
+        }
+        return totalTraveltime[0];
+    }
 
     /**
      * Calculate and return the ride end time.
@@ -62,8 +149,8 @@ public class CommonFunctionHelper {
      * @param  ride the ride for which the end time is to be calculated
      * @return      the ride end time
      */
-    public static LocalDateTime getRideEndTime(GraphHopper graphHopper, Ride ride){
-        ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(graphHopper,ride.getStartPosition(),ride.getEndPosition());
+    public static LocalDateTime getRideEndTime(Ride ride){
+        ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(ride.getStartPosition(),ride.getEndPosition());
         if(path==null){
             throw new RuntimeException("No path found with graphhopper!");
         }
@@ -83,7 +170,7 @@ public class CommonFunctionHelper {
         Coordinate uniCoordinate = request.getDropOffPosition();
         GHPoint ghPointEnd = new GHPoint(uniCoordinate.getLatitude(), uniCoordinate.getLongitude());
         GHRequest ghRequest = new GHRequest(ghPointStart,ghPointEnd).setProfile("car").setLocale(Locale.GERMANY);
-        ResponsePath path = ModeExecutionManager.graphHopper.route(ghRequest).getBest();
+        ResponsePath path = graphHopper.route(ghRequest).getBest();
 
         long timeInMinutes = path.getTime()/60000L;
         return request.getFavoredArrivalTime().minusMinutes(timeInMinutes);
@@ -220,13 +307,24 @@ public class CommonFunctionHelper {
                     GHPoint ghPointStart = new GHPoint(postcodeToCoordinate.get(postcode).getLatitude(), ModeExecutionManager.postcodeToCoordinate.get(postcode).getLongitude());
                     GHPoint ghPointEnd = new GHPoint(postcodeToCoordinate.get(postcode2).getLatitude(), ModeExecutionManager.postcodeToCoordinate.get(postcode2).getLongitude());
                     GHRequest ghRequest = new GHRequest(ghPointStart, ghPointEnd).setProfile("car").setLocale(Locale.GERMANY);
-                    GHResponse rsp = ModeExecutionManager.graphHopper.route(ghRequest);
+                    GHResponse rsp = graphHopper.route(ghRequest);
                     ResponsePath path = rsp.getBest();
                     secondsBetweenDropOffs.put(postcode + "-" + postcode2, path.getTime() / 1000);
                 }
             }
         }
     }
+
+    public static long computeTimeBetweenPoints(Coordinate one, Coordinate two) {
+        List<GHPoint> pointList = new ArrayList<>();
+        pointList.add(new GHPoint(one.getLatitude(), one.getLongitude()));
+        pointList.add(new GHPoint(two.getLatitude(), two.getLongitude()));
+        GHRequest req = new GHRequest(pointList);
+        req.setProfile("car");
+        GHResponse response = graphHopper.route(req);
+        return (response.getBest().getTime() / 60000);
+    }
+
 
 
     public static boolean isOverlapping(LocalDateTime start1, LocalDateTime end1, LocalDateTime start2, LocalDateTime end2) {

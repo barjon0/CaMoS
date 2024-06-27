@@ -16,6 +16,34 @@
       "studentCarPricePerLiter" : "double"
     }
   },
+  "SwitchDriver" : {
+    "class name" : "SwitchDriver",
+    "comparing" : "false",
+    "config" : {
+      "postcode mapping" : { "integer" : {"longitude": "double", "latitude": "double"}},
+      "studentCarConsumptionPerKm" : "double",
+      "studentCarCo2EmissionPerLiter" : "double",
+      "studentCarPricePerLiter" : "double",
+      "student car seat count" : "integer",
+      "time interval" : "long",
+      "stop time" : "long",
+      "accepted ridesharing time" : "function of x"
+    }
+  },
+  "ExactSolution" : {
+    "class name" : "ExactSolution",
+    "comparing" : "false",
+    "config" : {
+      "postcode mapping" : { "integer" : {"longitude": "double", "latitude": "double"}},
+      "studentCarConsumptionPerKm" : "double",
+      "studentCarCo2EmissionPerLiter" : "double",
+      "studentCarPricePerLiter" : "double",
+      "student car seat count" : "integer",
+      "time interval" : "long",
+      "stop time" : "long",
+      "accepted ridesharing time" : "function of x"
+    }
+  },
   "Ridesharing" : {
     "class name" : "RideSharing",
     "comparing" : "true",
