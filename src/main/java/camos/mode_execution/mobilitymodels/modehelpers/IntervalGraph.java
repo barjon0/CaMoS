@@ -84,7 +84,6 @@ public class IntervalGraph {
             List<Agent> cliqueList = maxClique.stream().toList();
             cliqueList.forEach(Gi::removeVertex);
             result.add(cliqueList);
-            System.out.println(Gi.vertexSet().size());
         }
         return result;
     }

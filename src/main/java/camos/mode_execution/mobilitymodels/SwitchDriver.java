@@ -34,22 +34,29 @@ public class SwitchDriver extends SDCTSP {
     @Override           //receives list of agents with requests of same day
     public void prepareMode(List<Agent> agents) {
         this.agents = agents;
+        System.out.println("before intervalgraph " + (System.nanoTime()/ 1_000_000) + "ms");
         //make greedy time bubbles
         List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs = IntervalGraph.buildIntervalGraph(agents);
         List<List<Agent>> bubblesTo = IntervalGraph.cliqueCover(graphs.get(0));
+        System.out.println("made one-sided bubbles " + (System.nanoTime()/ 1_000_000) + "ms");
         List<List<Agent>> bubblesFrom = IntervalGraph.cliqueCover(graphs.get(1));
+
+        System.out.println("before making clusters " + (System.nanoTime()/ 1_000_000) + "ms");
 
         //make Cluster call
         List<Match> clustersTo = new ArrayList<>();
         List<Match> clustersFrom = new ArrayList<>();
         bubblesTo.forEach(bubble -> clustersTo.addAll(makeCluster(bubble, Requesttype.DRIVETOUNI)));
+        System.out.println("one cluster side done" + (System.nanoTime()/ 1_000_000) + "ms");
         bubblesFrom.forEach(bubble -> clustersFrom.addAll(makeCluster(bubble, Requesttype.DRIVEHOME)));
 
+        System.out.println("before making matching " + (System.nanoTime()/ 1_000_000) + "ms");
         List<List<Match>> matching = MaximumMatching.getMatching(clustersTo, clustersFrom);
 
+        System.out.println("matching done " + (System.nanoTime()/ 1_000_000) + "ms");
         matching.addAll(repairRest(clustersTo, Requesttype.DRIVETOUNI));
         matching.addAll(repairRest(clustersFrom, Requesttype.DRIVEHOME));
-
+        System.out.println("repair done " + (System.nanoTime()/ 1_000_000) + "ms");
         //find driver
         matching.forEach(tuple -> {
             List<Agent> intersect = tuple.get(0).getPossDrivers().stream().filter(tuple.get(1).getPossDrivers()::contains).toList();
@@ -60,6 +67,7 @@ public class SwitchDriver extends SDCTSP {
         resultMatch = new ArrayList<>(matching.stream()
                 .flatMap(List::stream)
                 .toList());
+        System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
     }
 
     private List<List<Match>> repairRest(List<Match> clusters, Requesttype isToWork) {
@@ -123,16 +131,18 @@ public class SwitchDriver extends SDCTSP {
                 }
             }
         }
-
+        System.out.println("all potentials created " + (System.nanoTime()/ 1_000_000) + "ms");
         //keep merging clusters (smallest dist) first until no options left
         int count = 0;
         potential = potential.stream().sorted(comparingDouble(obj -> (double) obj.get(2))).toList();
         while (count < potential.size()) {
+            System.out.println("length of potential is: " + potential.size());
             Match m1 = (Match) potential.get(count).get(0);
             Match m2 = (Match) potential.get(count).get(1);
             count = count + 1;
             List<Agent> feasibleDrivers = getFeasibleDrivers(m1, m2);
             if (!feasibleDrivers.isEmpty()) {
+                System.out.println("done merge " + (System.nanoTime()/ 1_000_000) + "ms");
                 m1.addToTeam(m2.getAgents());
                 clusters.remove(m2);
                 m1.setPossDrivers(feasibleDrivers);
@@ -142,22 +152,24 @@ public class SwitchDriver extends SDCTSP {
                     Match checkM2 = (Match) potential.get(count).get(1);
                     if (checkM1 == m1 || checkM1 == m2 || checkM2 == m1 || checkM2 == m2) {
                         if (checkM1 == m2) {
-                            potential.get(count).set(0, m1);
                             checkM1 = m1;
                         }
                         if (checkM2 == m2) {
-                            potential.get(count).set(1, m1);
                             checkM2 = m1;
                         }
                         if (checkIfSuitable(checkM1, checkM2)) {
-                            potential.get(count).set(2, checkM1.getCentroid().computeDistance(checkM2.getCentroid()));
-                            changedPot.add(potential.get(count));
+                            List<Object> nextTrigram = new ArrayList<>();
+                            nextTrigram.add(checkM1);
+                            nextTrigram.add(checkM2);
+                            nextTrigram.add(checkM1.getCentroid().computeDistance(checkM2.getCentroid()));
+                            changedPot.add(nextTrigram);
                         }
                     } else {
                         changedPot.add(potential.get(count));
                     }
                     count = count + 1;
                 }
+                count = 0;
                 potential = changedPot.stream().sorted(comparingDouble(obj -> (double) obj.get(2))).toList();
                 //update others
             }

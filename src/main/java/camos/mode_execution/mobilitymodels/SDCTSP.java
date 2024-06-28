@@ -100,7 +100,7 @@ public abstract class SDCTSP extends MobilityMode {
         dataLines.add("Ride Id, TypeOfRide, Kilometer, Minuten, CO2, Kosten, Fahrer, Agenten");
         rides = rides.stream().sorted(Comparator.comparing(Ride::getTypeOfGrouping)).toList();
         for(Ride r : rides){
-            dataLines.add(r.getId() + "," + r.getTypeOfGrouping().toString() + "," + kmTravelledRide.get(r) + "," + minutesRide.get(r) + "," + emissionsRide.get(r) + "," + costsRide.get(r) + "," + r.getDriver().getId() + "," + r.getAgents().stream().map(Agent::getId).toList());
+            dataLines.add(r.getId() + "," + r.getTypeOfGrouping().toString() + "," + String.format(Locale.US,"%.2f", kmTravelledRide.get(r)) + "," + String.format(Locale.US,"%.2f", minutesRide.get(r)) + "," + String.format(Locale.US,"%.2f", emissionsRide.get(r)) + "," + String.format(Locale.US,"%.2f", costsRide.get(r)) + "," + r.getDriver().getId() + "," + r.getAgents().stream().map(Agent::getId).toList());
         }
         return dataLines;
     }
@@ -109,9 +109,9 @@ public abstract class SDCTSP extends MobilityMode {
         List<String> dataLines2 = new ArrayList<>();
         dataLines2.add("Agent Id, Hin-Kilometer,Hin-Minuten,Hin-CO2,Hin-Kosten,Rück-Kilometer,Rück-Minuten,Rück-CO2,Rück-Kosten");
         for(Agent a : agents) {
-            dataLines2.add(a.getId() + "," + kmTravelledBoth.get(a).get(0) + "," + minutesTravelledBoth.get(a).get(0) + "," + emissionsBoth.get(a).get(0) + ","
-                    + costsBoth.get(a).get(0) + "," +kmTravelledBoth.get(a).get(1) + "," + minutesTravelledBoth.get(a).get(1) + "," + emissionsBoth.get(a).get(1) + ","
-                    + costsBoth.get(a).get(1));
+            dataLines2.add(a.getId() + "," + String.format(Locale.US, "%.2f", kmTravelledBoth.get(a).get(0)) + "," + String.format(Locale.US, "%.2f", minutesTravelledBoth.get(a).get(0)) + "," + String.format(Locale.US,"%.2f", emissionsBoth.get(a).get(0)) + ","
+                    + String.format(Locale.US,"%.2f", costsBoth.get(a).get(0)) + "," + String.format(Locale.US,"%.2f", kmTravelledBoth.get(a).get(1)) + "," + String.format(Locale.US,"%.2f", minutesTravelledBoth.get(a).get(1)) + "," + String.format(Locale.US,"%.2f", emissionsBoth.get(a).get(1)) + ","
+                    + String.format(Locale.US,"%.2f", costsBoth.get(a).get(1)));
         }
         return dataLines2;
     }
@@ -212,10 +212,9 @@ public abstract class SDCTSP extends MobilityMode {
             ResponsePath lastPart = CommonFunctionHelper
                     .getSimpleBestGraphhopperPath(secondLast, ride.getEndPosition());
 
-            for (int j = 0; j < distPerAgent.length; j++) {
-                distPerAgent[j] += (lastPart.getDistance() / 1000.0);
-                timePerAgent[j] += (lastPart.getTime() / 60000.0);
-            }
+            distPerAgent[distPerAgent.length - 1] += (lastPart.getDistance() / 1000.0);
+            timePerAgent[timePerAgent.length - 1] += (lastPart.getTime() / 60000.0);
+
             ride.setDistanceCovered(distPerAgent[distPerAgent.length - 1]);
         }
 

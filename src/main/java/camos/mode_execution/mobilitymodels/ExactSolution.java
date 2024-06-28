@@ -32,7 +32,10 @@ public class ExactSolution extends SDCTSP{
     public void prepareMode(List<Agent> agents) throws Exception {
 
         this.agents = agents;
+        System.out.println("before enumerating " + (System.nanoTime()/ 1_000_000) + "ms");
+
         for (int i = 0; i < agents.size(); i++) {
+            System.out.println("one agent done" + (System.nanoTime()/ 1_000_000) + "ms");
             List<Agent> members = new ArrayList<>();
             members.add(agents.get(i));
             List<Agent> rem = new ArrayList<>(agents);
@@ -42,9 +45,13 @@ public class ExactSolution extends SDCTSP{
             buildUp(members, rem, Requesttype.DRIVEHOME,
                     CommonFunctionHelper.getTimeInterval(agents.get(i), Requesttype.DRIVEHOME));
         }
+        System.out.println("enumarating done " + (System.nanoTime()/ 1_000_000) + "ms");
+
         foundRouteSets = CplexSolver.solveProblem(lookUpTo.values().stream().flatMap(List::stream)
                 .toList(), lookUpFrom.values().stream().flatMap(List::stream)
                 .toList(), agents);
+
+        System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
 
     }
 
