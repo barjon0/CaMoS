@@ -9,6 +9,7 @@ import camos.mobilitydemand.PostcodeManager;
 import camos.mode_execution.mobilitymodels.MobilityMode;
 import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
 import org.apache.commons.io.IOUtils;
+import org.geotools.filter.visitor.Mode;
 import org.geotools.referencing.CRS;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -38,7 +39,6 @@ public class ModeExecutionManager {
 
     public static GraphHopper graphHopper;
 
-    public static double percentOfWillingStudents;
 
 
     public static void startModes(String configPath) throws Exception {
@@ -73,6 +73,7 @@ public class ModeExecutionManager {
                 System.out.println("Postcode stuff done");
                 //TODO sortiere modes nach compare to
                 for(String mode : modes){
+                    System.out.println("\nTrying " + mode);
                     startMode(mode,agents);
                 }
 
@@ -137,6 +138,7 @@ public class ModeExecutionManager {
 
     public static void setGeneralManagerAttributes(org.json.JSONObject json){
         GeneralManager.busSeatCount = json.optInt("bus seat count");
+        GeneralManager.preClusterSize = json.optInt("ClusterSize");
         GeneralManager.busWithDriver = json.optBoolean("busWithDriver");
         GeneralManager.busCount = json.optInt("bus count");
         GeneralManager.busConsumptionPerKm = json.optDouble("busConsumptionPerKm");
@@ -158,7 +160,7 @@ public class ModeExecutionManager {
         GeneralManager.countOfGroups = json.optInt("countOfGroups");
         GeneralManager.radiusToExclude = json.optDouble("radiusToExclude");
 
-        GeneralManager.percentOfWillingStudents = json.optDouble("percentOfWillingStudents");
+        GeneralManager.percentOfWillingStudents = json.optInt("percentWilling");
 
 
         uniPositions = new ArrayList<>();

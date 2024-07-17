@@ -48,7 +48,7 @@ public class StartHelpers {
                     }
                 }
             }
-        }else throw new RuntimeException("mode with name " + modeName + "is missing or not a valid JSONObject.");
+        }else throw new RuntimeException("mode with name " + modeName + " is missing or not a valid JSONObject.");
     }
 
 

@@ -1,5 +1,6 @@
 package camos.mode_execution.mobilitymodels;
 
+import camos.GeneralManager;
 import camos.mode_execution.Agent;
 import camos.mode_execution.Coordinate;
 import camos.mode_execution.Requesttype;
@@ -8,23 +9,30 @@ import camos.mode_execution.groupings.Ride;
 import camos.mode_execution.groupings.RouteSet;
 import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.modehelpers.CplexSolver;
+import camos.mode_execution.mobilitymodels.modehelpers.IntervalGraph;
+import org.jgrapht.Graphs;
+import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.DefaultUndirectedGraph;
 
+import java.awt.geom.Point2D;
 import java.io.File;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static java.util.Comparator.comparingDouble;
+
 public class ExactSolution extends SDCTSP{
 
     List<RouteSet> foundRouteSets;
-    Map<Integer, List<RouteSet>> lookUpTo;
-    Map<Integer, List<RouteSet>> lookUpFrom;
+    List<RouteSet> lookUpTo;
+    List<RouteSet> lookUpFrom;
 
     public ExactSolution() {
         super();
-        lookUpTo = new HashMap<>();
-        lookUpFrom = new HashMap<>();
+        lookUpTo = new ArrayList<>();
+        lookUpFrom = new ArrayList<>();
         foundRouteSets = new ArrayList<>();
     }
 
@@ -34,29 +42,217 @@ public class ExactSolution extends SDCTSP{
         this.agents = agents;
         System.out.println("before enumerating " + (System.nanoTime()/ 1_000_000) + "ms");
 
-        for (int i = 0; i < agents.size(); i++) {
-            System.out.println("one agent done" + (System.nanoTime()/ 1_000_000) + "ms");
-            List<Agent> members = new ArrayList<>();
-            members.add(agents.get(i));
-            List<Agent> rem = new ArrayList<>(agents);
-            rem.remove(i);
-            buildUp(members, rem, Requesttype.DRIVETOUNI,
-                    CommonFunctionHelper.getTimeInterval(agents.get(i), Requesttype.DRIVETOUNI));
-            buildUp(members, rem, Requesttype.DRIVEHOME,
-                    CommonFunctionHelper.getTimeInterval(agents.get(i), Requesttype.DRIVEHOME));
-        }
-        System.out.println("enumarating done " + (System.nanoTime()/ 1_000_000) + "ms");
+        Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
+                .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
+        for(List<Agent> oneTarget : agentsByTarget.values()) {
 
-        foundRouteSets = CplexSolver.solveProblem(lookUpTo.values().stream().flatMap(List::stream)
-                .toList(), lookUpFrom.values().stream().flatMap(List::stream)
-                .toList(), agents);
+                System.out.println("starting one Target " + (System.nanoTime() / 1_000_000) + "ms");
+                /*
+                //get all max Time Cliques -> smaller instance sizes (possible rough spatial cluster before here)
+                List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs  = IntervalGraph.buildIntervalGraph(oneTarget);
+                List<List<List<Agent>>> allCliques = new ArrayList<>();
+                allCliques.add(IntervalGraph.getAllMaxCliques(graphs.get(0)));
+                allCliques.add(IntervalGraph.getAllMaxCliques(graphs.get(1)));
+                Requesttype requesttype = Requesttype.DRIVETOUNI;
+                */
+
+                List<List<Agent>> preClusters = makePreclusteringRadial(oneTarget);
+                for(List<Agent> preCluster : preClusters) {
+                    DefaultUndirectedGraph<Agent, DefaultEdge> shareGraphTo =
+                            buildShareGraph(preCluster, Requesttype.DRIVETOUNI);
+                    DefaultUndirectedGraph<Agent, DefaultEdge> shareGraphFrom =
+                            buildShareGraph(preCluster, Requesttype.DRIVEHOME);
+                    System.out.println("building Cliques to " + (System.nanoTime() / 1_000_000) + "ms");
+                    buildingCliques(shareGraphTo, Requesttype.DRIVETOUNI);
+                    System.out.println("building cliques from " + (System.nanoTime() / 1_000_000) + "ms");
+                    buildingCliques(shareGraphFrom, Requesttype.DRIVEHOME);
+                }
+                /*
+                for (List<Agent> preCluster : preClusters) {
+                    for (int i = 0; i < preCluster.size(); i++) {
+                        List<Agent> members = new ArrayList<>();
+                        members.add(preCluster.get(i));
+                        List<Agent> rem = new ArrayList<>(preCluster);
+                        rem.remove(i);
+                        buildUp(members, rem, Requesttype.DRIVETOUNI,
+                                CommonFunctionHelper.getTimeInterval(preCluster.get(i), Requesttype.DRIVETOUNI));
+                        buildUp(members, rem, Requesttype.DRIVEHOME,
+                                CommonFunctionHelper.getTimeInterval(preCluster.get(i), Requesttype.DRIVEHOME));
+                    }
+                }
+
+                 */
+            System.out.println("enumarating done for target " + (System.nanoTime() / 1_000_000) + "ms");
+
+            List<RouteSet> sets = CplexSolver.solveProblem(lookUpTo, lookUpFrom, oneTarget);
+            if(sets != null) {
+                foundRouteSets.addAll(sets);
+                lookUpTo = new ArrayList<>();
+                lookUpFrom = new ArrayList<>();
+                System.out.println("solved for one target");
+            } else {
+                throw new IllegalStateException("NO solution found");
+            }
+
+        }
 
         System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
 
     }
 
+    private void buildingCliques(DefaultUndirectedGraph<Agent, DefaultEdge> shareGraph, Requesttype isToWork) {
+        List<RouteSet> routeSetList;
+        if(isToWork == Requesttype.DRIVETOUNI) {
+            routeSetList = lookUpTo;
+        } else {
+            routeSetList = lookUpFrom;
+        }
 
+        List<Set<Agent>> finalLastCliques = new ArrayList<>();
+        shareGraph.vertexSet().forEach(v -> {
+            Set<Agent> members = new HashSet<>();
+            members.add(v);
+            finalLastCliques.add(members);
+            routeSetList.add(new RouteSet(members.stream().toList(), v, isToWork));
+        });
+        List<Set<Agent>> lastCliques = finalLastCliques;
 
+        int k = 1;
+        while (!lastCliques.isEmpty()) {
+            List<Set<Agent>> nextCliques = new ArrayList<>();
+            for(Set<Agent> clique : lastCliques) {
+                int finalK = k;
+                if(clique.stream().anyMatch(a -> a.getCar().getSeatCount() > finalK)) {
+                    Iterator<Agent> iterator = clique.iterator();
+                    Set<Agent> candidates = Graphs.neighborSetOf(shareGraph, iterator.next());
+                    while(iterator.hasNext()) {
+                        Agent nextAgent = iterator.next();
+                        candidates = candidates.stream().filter(a ->
+                                Graphs.neighborSetOf(shareGraph, nextAgent).contains(a))
+                                .collect(Collectors.toSet());
+                    }
+                    for (Agent candidate : candidates) {
+                        //only expand candidate when he has bigger id -> every clique only looked at once
+                        Set<Agent> memberSet = new HashSet<>(clique);
+                        memberSet.add(candidate);
+                        if (clique.stream().allMatch(u -> u.getId() < candidate.getId())) {
+                            boolean found = false;
+                            List<LocalDateTime> interval =
+                                    CommonFunctionHelper.calculateInterval(memberSet.stream().toList(), isToWork);
+                            if (interval != null) {
+                                List<Agent> possDrivers = memberSet.stream()
+                                        .filter(a -> a.getCar().getSeatCount() > finalK).toList();
+                                for (Agent driver : possDrivers) {
+                                    RouteSet rS = null;
+                                    List<Agent> withoutDriver = new ArrayList<>(memberSet);
+                                    withoutDriver.remove(driver);
+                                    List<List<Agent>> permutations = CommonFunctionHelper.getPermut(withoutDriver);
+                                    for (List<Agent> permut : permutations) {
+                                        permut.add(0, driver);
+                                        Long travelTime = CommonFunctionHelper.checkFeasTime(permut);
+                                        if (travelTime != null) {
+                                            if (rS == null) {
+                                                rS = new RouteSet(permut, driver, isToWork);
+                                                routeSetList.add(rS);
+                                                found = true;
+                                            } else {
+                                                if (rS.getTimeInMinutes() > travelTime) {
+                                                    rS.setOrder(permut);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                }
+                            }
+                            if (found) {
+                                nextCliques.add(memberSet);
+                            }
+                        }
+                    }
+
+                }
+            }
+            lastCliques = nextCliques;
+            k += 1;
+            System.out.println("CliqueSize is " + k);
+        }
+    }
+
+    private DefaultUndirectedGraph<Agent, DefaultEdge> buildShareGraph(List<Agent> agents, Requesttype isToWork) {
+
+        DefaultUndirectedGraph<Agent, DefaultEdge> shareGraph =
+                new DefaultUndirectedGraph<>(DefaultEdge.class);
+        agents.forEach(shareGraph::addVertex);
+
+        for (int i = 0; i < agents.size(); i++) {
+            for (int j = i + 1; j < agents.size(); j++) {
+                List<Agent> pair = new ArrayList<>();
+                pair.add(agents.get(i));
+                pair.add(agents.get(j));
+                List<LocalDateTime> interval = CommonFunctionHelper.calculateInterval(pair, isToWork);
+                if (interval != null) {
+                    Long travelTime = CommonFunctionHelper.checkFeasTime(pair);
+                    if (travelTime == null) {
+                        Collections.reverse(pair);
+                        travelTime = CommonFunctionHelper.checkFeasTime(pair);
+                    }
+                    if (travelTime != null) {
+                        shareGraph.addEdge(pair.get(0), pair.get(1));
+                    }
+
+                }
+            }
+        }
+        return shareGraph;
+    }
+
+    private List<List<Agent>> makePreclusteringRadial(List<Agent> oneTarget) {
+        //create method to get slope between agent and target
+        Point2D target = CommonFunctionHelper.convertToMercator(
+                oneTarget.get(0).getRequest().getDropOffPosition());
+        List<List<Agent>> result = new ArrayList<>();
+        List<List<Object>> radials = new ArrayList<>();
+        for(Agent ag : oneTarget) {
+            List<Object> tuple = new ArrayList<>();
+            tuple.add(ag);
+            tuple.add(CommonFunctionHelper.angleWithVertical(target,
+                    CommonFunctionHelper.convertToMercator(ag.getHomePosition())));
+            radials.add(tuple);
+        }
+        radials = radials.stream().sorted(comparingDouble(obj -> (double) obj.get(1))).toList();
+
+        int counter = 0;
+        List<Agent> sector = new ArrayList<>();
+        for (int i = 0; i < radials.size(); i++) {
+
+            sector.add((Agent) radials.get(i).get(0));
+            counter += 1;
+
+            if(counter == GeneralManager.preClusterSize) {
+                counter = 0;
+                result.add(sector);
+                sector = new ArrayList<>();
+            }
+        }
+        if (counter != 0) {
+            result.add(sector);
+        }
+        return result;
+
+    }
+
+    private List<List<List<Agent>>> makePreclusteringbyTime(List<Agent> agenList) {
+        List<List<List<Agent>>> result = new ArrayList<>();
+        List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs
+                = IntervalGraph.buildIntervalGraph(agenList);
+        result.add(IntervalGraph.cliqueCover(graphs.get(0)));
+        result.add(IntervalGraph.cliqueCover(graphs.get(1)));
+
+        return result;
+    }
+
+/*
     private void buildUp(List<Agent> members, List<Agent> remaining, Requesttype isToWork, List<LocalDateTime> currInterval) {
 
         Long minutes = CommonFunctionHelper.checkFeasTime(members);
@@ -122,6 +318,8 @@ public class ExactSolution extends SDCTSP{
             }
         }
     }
+
+ */
 
     private int getHash(List<Agent> members) {
         int value = 0;

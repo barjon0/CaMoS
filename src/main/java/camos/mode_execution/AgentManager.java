@@ -4,6 +4,7 @@ import camos.GeneralManager;
 import camos.mobilitydemand.AgentCollector;
 import camos.mode_execution.carmodels.StudentVehicle;
 import org.apache.commons.io.IOUtils;
+import org.geotools.filter.visitor.Mode;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.locationtech.jts.geom.CoordinateXY;
@@ -37,67 +38,65 @@ public class AgentManager {
                     if(postcodesWithRemainingNeededAgents.containsKey(postcode)){
                         int numberOfAgentsToRetrieve = postcodesWithRemainingNeededAgents.get(postcode);
                         org.json.JSONArray agentArray = (org.json.JSONArray) postcodeObject.get("agents");
-                        for(int i=0; i<numberOfAgentsToRetrieve; i++){
-                            if(i==agentArray.length()){
-                                break;
-                            }
-                            org.json.JSONObject agentObject = agentArray.getJSONObject(i);
-                            Coordinate homePosition = new Coordinate(agentObject.getDouble("home location longitude"),agentObject.getDouble("home location latitude"));
-                            Agent agent;
-
-                            agent = new Agent(agentObject.getLong("agent id"),homePosition, new StudentVehicle());
-
+                        for(int i = 0; i < numberOfAgentsToRetrieve; i++){
                             int low = 1;
                             int high = 101;
                             int result = GeneralManager.random.nextInt(high-low) + low;
-                            if(result> ModeExecutionManager.percentOfWillingStudents){
-                                agent.setWillingToUseAlternatives(false);
-                            }
-
-                            // FIXME: changed target to same PLZ
-                            Request request = new Request(agent,Requesttype.BOTH,postcode,GeneralManager.uniPLZ ,homePosition, ModeExecutionManager.turnUniPostcodeIntoCoordinate(GeneralManager.uniPLZ));
-
-                            try {
-                                String departureTimeString = "02.02.2023 " + agentObject.getString("departure time");
-                                LocalDateTime departureTime = LocalDateTime.parse(departureTimeString, GeneralManager.dateTimeFormatter);
-                                String arrivalTimeString = "02.02.2023 " + agentObject.getString("arrival time");
-                                LocalDateTime arrivalTime = LocalDateTime.parse(arrivalTimeString, GeneralManager.dateTimeFormatter);
-                                String requestTimeString = "02.02.2023 " + agentObject.getString("request time");
-                                LocalDateTime requestTime = LocalDateTime.parse(requestTimeString, GeneralManager.dateTimeFormatter);
-
-                                if(departureTime.isBefore(arrivalTime)){
-                                    departureTime = departureTime.plusDays(1);
+                            if(result <= GeneralManager.percentOfWillingStudents) {
+                                if (i >= agentArray.length()) {
+                                    break;
                                 }
-                                if(arrivalTime.isBefore(requestTime)){
-                                    requestTime = requestTime.minusDays(1);
+                                org.json.JSONObject agentObject = agentArray.getJSONObject(i);
+                                Coordinate homePosition = new Coordinate(agentObject.getDouble("home location longitude"), agentObject.getDouble("home location latitude"));
+                                String uniPLZ = agentObject.getString("uni location");
+                                Agent agent;
+
+                                agent = new Agent(agentObject.getLong("agent id"), homePosition, new StudentVehicle());
+
+                                Request request = new Request(agent, Requesttype.BOTH, postcode, uniPLZ, homePosition, ModeExecutionManager.turnUniPostcodeIntoCoordinate(uniPLZ));
+
+                                try {
+                                    String departureTimeString = "02.02.2023 " + agentObject.getString("departure time");
+                                    LocalDateTime departureTime = LocalDateTime.parse(departureTimeString, GeneralManager.dateTimeFormatter);
+                                    String arrivalTimeString = "02.02.2023 " + agentObject.getString("arrival time");
+                                    LocalDateTime arrivalTime = LocalDateTime.parse(arrivalTimeString, GeneralManager.dateTimeFormatter);
+                                    String requestTimeString = "02.02.2023 " + agentObject.getString("request time");
+                                    LocalDateTime requestTime = LocalDateTime.parse(requestTimeString, GeneralManager.dateTimeFormatter);
+
+                                    if (departureTime.isBefore(arrivalTime)) {
+                                        departureTime = departureTime.plusDays(1);
+                                    }
+                                    if (arrivalTime.isBefore(requestTime)) {
+                                        requestTime = requestTime.minusDays(1);
+                                    }
+
+                                    request.setFavoredDepartureTime(departureTime);
+                                    request.setDepartureIntervalStart(departureTime);
+                                    request.setDepartureIntervalEnd(departureTime.plusMinutes(agent.getTimeIntervalInMinutes() * 2));
+                                    request.setFavoredArrivalTime(arrivalTime);
+                                    request.setArrivalIntervalStart(arrivalTime.minusMinutes(agent.getTimeIntervalInMinutes()));
+                                    request.setArrivalIntervalEnd(arrivalTime.plusMinutes(agent.getTimeIntervalInMinutes()));
+                                    if (!request.getArrivalIntervalEnd().isBefore(request.getDepartureIntervalStart())) {
+                                        request.setArrivalIntervalEnd(request.getDepartureIntervalStart().minusMinutes(5L));
+                                    }
+                                    request.setRequestTime(requestTime);
+                                } catch (Exception e) {
+                                    e.printStackTrace();
                                 }
 
-                                request.setFavoredDepartureTime(departureTime);
-                                request.setDepartureIntervalStart(departureTime);
-                                request.setDepartureIntervalEnd(departureTime.plusMinutes(agent.getTimeIntervalInMinutes()*2));
-                                request.setFavoredArrivalTime(arrivalTime);
-                                request.setArrivalIntervalStart(arrivalTime.minusMinutes(agent.getTimeIntervalInMinutes()));
-                                request.setArrivalIntervalEnd(arrivalTime.plusMinutes(agent.getTimeIntervalInMinutes()));
-                                if(!request.getArrivalIntervalEnd().isBefore(request.getDepartureIntervalStart())){
-                                    request.setArrivalIntervalEnd(request.getDepartureIntervalStart().minusMinutes(5L));
-                                }
-                                request.setRequestTime(requestTime);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-
-                            if(GeneralManager.plzRadius){
-                                agent.setRequest(request);
-                                agents.add(agent);
-                            }else{
-                                org.locationtech.jts.geom.Coordinate homeCoordinate = new CoordinateXY(agent.getHomePosition().getLongitude(),agent.getHomePosition().getLatitude());
-                                org.locationtech.jts.geom.Coordinate campusCoordinate = new CoordinateXY(request.getDropOffPosition().getLongitude(),request.getDropOffPosition().getLatitude());
-
-                                double distance = JTS.orthodromicDistance(homeCoordinate,campusCoordinate, DefaultGeographicCRS.WGS84);
-                                distance = distance/1000;
-                                if(distance <= GeneralManager.upperRadius && distance>= GeneralManager.lowerRadius){
+                                if (GeneralManager.plzRadius) {
                                     agent.setRequest(request);
                                     agents.add(agent);
+                                } else {
+                                    org.locationtech.jts.geom.Coordinate homeCoordinate = new CoordinateXY(agent.getHomePosition().getLongitude(), agent.getHomePosition().getLatitude());
+                                    org.locationtech.jts.geom.Coordinate campusCoordinate = new CoordinateXY(request.getDropOffPosition().getLongitude(), request.getDropOffPosition().getLatitude());
+
+                                    double distance = JTS.orthodromicDistance(homeCoordinate, campusCoordinate, DefaultGeographicCRS.WGS84);
+                                    distance = distance / 1000;
+                                    if (distance <= GeneralManager.upperRadius && distance >= GeneralManager.lowerRadius) {
+                                        agent.setRequest(request);
+                                        agents.add(agent);
+                                    }
                                 }
                             }
                         }

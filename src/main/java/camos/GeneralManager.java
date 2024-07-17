@@ -18,13 +18,14 @@ import java.util.stream.Stream;
 
 public class GeneralManager {
 
-    public static String uniPLZ = "97070";      //PLZ of target location, (wiwi-building)
-    public static double propForCar = 1;
+    //public static String uniPLZ = "97070";      //PLZ of target location, (wiwi-building)
     public static boolean handleLost = true;
     public static boolean plzRadius = false;
     public static double upperRadius;
     public static double lowerRadius;
-    public static double percentOfWillingStudents = 100;
+    public static int percentOfWillingStudents;
+
+    public static int preClusterSize;
 
     public static MobilityType compareMode = MobilityType.EVERYBODYDRIVES; //TODO
     public static Random random = new Random(1234);

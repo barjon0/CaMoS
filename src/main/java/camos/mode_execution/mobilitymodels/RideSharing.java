@@ -34,6 +34,7 @@ import camos.mode_execution.mobilitymodels.tsphelpers.TransportCosts;
 
 import java.io.File;
 import java.io.PrintWriter;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -306,6 +307,8 @@ public class RideSharing extends MobilityMode {
         dataLines2.add("averageSeatCount,averageSeatCountToUni,averageSeatCountHome,count of lost students,count of driving students,count of agents,count of rides,count of rides to uni,count of rides home,averageSeatCountForWilling,countOfWilling,averageSeatCountToUniForWilling,countOfWillingToUni,averageSeatCountHomeForWilling,countOfWillingHome,averageSeatCountForGroups,countOfGroups,averageSeatCountToUniForGroups,countOfGroupsToUni,averageSeatCountHomeForGroups,countOfGroupsHome");
         dataLines2.add(averageSeatCount + "," + averageSeatCountToUni + "," + averageSeatCountHome + "," + lost.keySet().size() + "," + drivers.size() + "," + agents.size() + "," + finishedMatches.size() + "," + countOfToUni + "," + countOfHome + "," + averageSeatCountForWilling + "," + countOfWilling + "," + averageSeatCountToUniForWilling + "," + countOfWillingToUni + "," + averageSeatCountHomeForWilling + "," + countOfWillingHome + "," + averageSeatCountForGroups + "," + countOfGroups + "," + averageSeatCountToUniForGroups + "," + countOfGroupsToUni + "," + averageSeatCountHomeForGroups + "," + countOfGroupsHome);
 
+        double avgTimeTravelledTo = 0;
+
         for(Agent a : agents) {
             Ride toUni = agentToRides.get(a).get(0);
             Set<Object> set = Set.of(a,toUni);
@@ -327,6 +330,7 @@ public class RideSharing extends MobilityMode {
                 co2 = 0.0;
                 cost = 0.0;
             }
+            avgTimeTravelledTo += minutesTravelled.get(a);
             dataLines.add(a.getId() + "," + agentToRides.get(a).get(0).getId() + "," + (agentToRides.get(a).size() > 1 ? agentToRides.get(a).get(1).getId() : -1) + "," + a.isWillingToUseAlternatives() + "," + toUni.getDriver().equals(a) + "," + (toUni.getAgents().size() == 1) + "," + (home != null && home.getAgents().size() == 1) + "," + lost.containsKey(a) + "," + kmTravelled.get(a) + "," + minutesTravelled.get(a) + "," + emissions.get(a) + "," + costs.get(a) + "," + oneWayKmTravelled.get(set) + "," + oneWayMinutesTravelled.get(set) + "," + oneWayEmissions.get(set) + "," + oneWayCosts.get(set) + "," + km + "," + min + "," + co2 + "," + cost);
         }
 
@@ -358,6 +362,24 @@ public class RideSharing extends MobilityMode {
         }catch (Exception e){
             throw new RuntimeException(e.getMessage());
         }
+
+        long totalMinutes = 0;
+        double totalKilometers = 0;
+        int aloneRides = 0;
+        for(Ride ride : rides) {
+            totalMinutes += Duration.between(ride.getEndTime(), ride.getStartTime()).toMinutes();
+            totalKilometers += kmTravelled.get(ride.getDriver());
+            if(ride.getAgents().size() == 1) {
+                aloneRides += 1;
+            }
+        }
+        System.out.println("Total Minutes Travelled: " + totalMinutes + "\n" +
+                "Total Kilometers Travelled: " + totalKilometers + "\n" +
+                "Average Seat Count: " + averageSeatCount + "\n" +
+                "Number of Rides alone: " + aloneRides + "\n" +
+                "Average Time Travelled: " + (avgTimeTravelledTo / agents.size()) + "\n" +
+                "Number of Lost Students: " + lost.keySet().size());
+
     }
 
     @Override

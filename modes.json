@@ -33,6 +33,7 @@
   "ExactSolution" : {
     "class name" : "ExactSolution",
     "comparing" : "false",
+    "ClusterSize" : "integer",
     "config" : {
       "postcode mapping" : { "integer" : {"longitude": "double", "latitude": "double"}},
       "studentCarConsumptionPerKm" : "double",
@@ -50,6 +51,7 @@
     "compare to" : "EverybodyDrives",
     "config" : {
       "student car seat count" : "integer",
+      "percentWilling" : "integer",
       "time interval" : "long",
       "accepted walking distance" : "double",
       "accepted ridesharing time" : "function of x",

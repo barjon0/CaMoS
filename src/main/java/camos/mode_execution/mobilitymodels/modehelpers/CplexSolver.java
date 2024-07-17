@@ -26,7 +26,11 @@ public class CplexSolver {
                 List<IloNumVar> varListTo = new ArrayList<>();
                 List<IloNumVar> varListToDriver = new ArrayList<>();
                 for (int j = 0; j < toWorkRoutes.size(); j++) {
-                    if (toWorkRoutes.get(j).getMembers().contains(agent)) {
+                    RouteSet routeSet = toWorkRoutes.get(j);
+                    if (routeSet == null) {
+                        System.out.println("hI hello");
+                    }
+                    if (routeSet.getMembers().contains(agent)) {
                         if (toWorkRoutes.get(j).getDriver() == agent) {
                             varListToDriver.add(binVars[j]);
                         }

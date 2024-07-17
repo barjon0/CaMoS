@@ -15,6 +15,7 @@ import java.io.PrintWriter;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public abstract class SDCTSP extends MobilityMode {
 
@@ -58,37 +59,51 @@ public abstract class SDCTSP extends MobilityMode {
     public boolean checkIfConstraintsAreBroken(List<Agent> agents) {
         //checks if everyone has exactly one ride to and from, intervals fit, capacities fit, drivers match,
         //does not check if maximum drive time is held up
-        int[] checkingTo = new int[agents.size()];
-        int[] checkingFrom = new int[agents.size()];
-        int[] checkingToDriver = new int[agents.size()];
-        int[] checkingFromDriver = new int[agents.size()];
-        for (Ride ride : rides) {
-            List<LocalDateTime> interval = CommonFunctionHelper.calculateInterval(
-                    ride.getAgents(), ride.getTypeOfGrouping());
-            if (interval == null) {
-                return true;
-            }
-            if (ride.getDriver().getCar().getSeatCount() < ride.getAgents().size()) {
-                return true;
-            }
-            if (ride.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
-                for (Agent a : ride.getAgents()) {
-                    checkingTo[agents.indexOf(a)] += 1;
-                }
-                Agent driver = ride.getDriver();
-                checkingToDriver[agents.indexOf(driver)] += 1;
+        Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
+                .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
+        Map<Coordinate, List<Ride>> ridesByTarget = rides.stream().collect(Collectors.groupingBy(r -> {
+            if(r.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
+                return r.getEndPosition();
             } else {
-                for (Agent a : ride.getAgents()) {
-                    checkingFrom[agents.indexOf(a)] += 1;
-                }
-                Agent driver = ride.getDriver();
-                checkingFromDriver[agents.indexOf(driver)] += 1;
+                return r.getStartPosition();
             }
-        }
-        for (int i = 0; i < agents.size(); i++) {
-            if (checkingTo[i] != 1 || checkingFrom[i] != 1 ||
-                    (checkingToDriver[i] != checkingFromDriver[i])) {
-                return true;
+        }));
+        for(Coordinate target : agentsByTarget.keySet()) {
+            List<Agent> agentList = agentsByTarget.get(target);
+            List<Ride> rideList = ridesByTarget.get(target);
+            int[] checkingTo = new int[agentList.size()];
+            int[] checkingFrom = new int[agentList.size()];
+            int[] checkingToDriver = new int[agentList.size()];
+            int[] checkingFromDriver = new int[agentList.size()];
+
+            for (Ride ride : rideList) {
+                List<LocalDateTime> interval = CommonFunctionHelper.calculateInterval(
+                        ride.getAgents(), ride.getTypeOfGrouping());
+                if (interval == null) {
+                    return true;
+                }
+                if (ride.getDriver().getCar().getSeatCount() < ride.getAgents().size()) {
+                    return true;
+                }
+                if (ride.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
+                    for (Agent a : ride.getAgents()) {
+                        checkingTo[agentList.indexOf(a)] += 1;
+                    }
+                    Agent driver = ride.getDriver();
+                    checkingToDriver[agentList.indexOf(driver)] += 1;
+                } else {
+                    for (Agent a : ride.getAgents()) {
+                        checkingFrom[agentList.indexOf(a)] += 1;
+                    }
+                    Agent driver = ride.getDriver();
+                    checkingFromDriver[agentList.indexOf(driver)] += 1;
+                }
+            }
+            for (int i = 0; i < agentList.size(); i++) {
+                if (checkingTo[i] != 1 || checkingFrom[i] != 1 ||
+                        (checkingToDriver[i] != checkingFromDriver[i])) {
+                    return true;
+                }
             }
         }
 
@@ -97,22 +112,25 @@ public abstract class SDCTSP extends MobilityMode {
 
     public List<String> createAccumData() {
         List<String> dataLines = new ArrayList<>();
-        dataLines.add("Ride Id, TypeOfRide, Kilometer, Minuten, CO2, Kosten, Fahrer, Agenten");
+        dataLines.add("Ride Id, TypeOfRide, Zielort, Kilometer, Minuten, CO2, Kosten, Fahrer, Agenten");
         rides = rides.stream().sorted(Comparator.comparing(Ride::getTypeOfGrouping)).toList();
         for(Ride r : rides){
-            dataLines.add(r.getId() + "," + r.getTypeOfGrouping().toString() + "," + String.format(Locale.US,"%.2f", kmTravelledRide.get(r)) + "," + String.format(Locale.US,"%.2f", minutesRide.get(r)) + "," + String.format(Locale.US,"%.2f", emissionsRide.get(r)) + "," + String.format(Locale.US,"%.2f", costsRide.get(r)) + "," + r.getDriver().getId() + "," + r.getAgents().stream().map(Agent::getId).toList());
+            dataLines.add(r.getId() + "," + r.getTypeOfGrouping().toString() + "," + r.getAgents().get(0).getRequest().getUniPLZ() + "," + String.format(Locale.US,"%.2f", kmTravelledRide.get(r)) + "," + String.format(Locale.US,"%.2f", minutesRide.get(r)) + "," + String.format(Locale.US,"%.2f", emissionsRide.get(r)) + "," + String.format(Locale.US,"%.2f", costsRide.get(r)) + "," + r.getDriver().getId() + "," + r.getAgents().stream().map(Agent::getId).toList());
         }
         return dataLines;
     }
 
     public List<String> createSingleData() {
         List<String> dataLines2 = new ArrayList<>();
-        dataLines2.add("Agent Id, Hin-Kilometer,Hin-Minuten,Hin-CO2,Hin-Kosten,Rück-Kilometer,Rück-Minuten,Rück-CO2,Rück-Kosten");
+        double avgTimeTravelledTo = 0;
+        dataLines2.add("Agent Id, Uni-PLZ, Hin-Kilometer,Hin-Minuten,Hin-CO2,Hin-Kosten,Rück-Kilometer,Rück-Minuten,Rück-CO2,Rück-Kosten");
         for(Agent a : agents) {
-            dataLines2.add(a.getId() + "," + String.format(Locale.US, "%.2f", kmTravelledBoth.get(a).get(0)) + "," + String.format(Locale.US, "%.2f", minutesTravelledBoth.get(a).get(0)) + "," + String.format(Locale.US,"%.2f", emissionsBoth.get(a).get(0)) + ","
+            avgTimeTravelledTo += minutesTravelledBoth.get(a).get(0) + minutesTravelledBoth.get(a).get(1);
+            dataLines2.add(a.getId() + "," + a.getRequest().getUniPLZ() + "," + String.format(Locale.US, "%.2f", kmTravelledBoth.get(a).get(0)) + "," + String.format(Locale.US, "%.2f", minutesTravelledBoth.get(a).get(0)) + "," + String.format(Locale.US,"%.2f", emissionsBoth.get(a).get(0)) + ","
                     + String.format(Locale.US,"%.2f", costsBoth.get(a).get(0)) + "," + String.format(Locale.US,"%.2f", kmTravelledBoth.get(a).get(1)) + "," + String.format(Locale.US,"%.2f", minutesTravelledBoth.get(a).get(1)) + "," + String.format(Locale.US,"%.2f", emissionsBoth.get(a).get(1)) + ","
                     + String.format(Locale.US,"%.2f", costsBoth.get(a).get(1)));
         }
+        System.out.println("Average Time Travelled: " + (avgTimeTravelledTo / (2L*agents.size())));
         return dataLines2;
     }
 
@@ -122,6 +140,12 @@ public abstract class SDCTSP extends MobilityMode {
     }
 
     public void calculateMetrics() {
+        long totalMinutes = 0;
+        double totalKilometers = 0;
+        double avgSeatCount = 0;
+        int aloneRides = 0;
+        //also find avg ride time per agent
+
         for(Ride r : rides) {
             emissionsRide.put(r, r.getDistanceCovered()*r.getDriver().getCar().getConsumptionPerKm()
                     *r.getDriver().getCar().getCo2EmissionPerLiter());
@@ -130,6 +154,13 @@ public abstract class SDCTSP extends MobilityMode {
             kmTravelledRide.put(r, r.getDistanceCovered());
             minutesRide.put(r, (double) Duration.between(
                     r.getStartTime(), r.getEndTime()).toMinutes());
+            totalMinutes += Duration.between(r.getStartTime(), r.getEndTime()).toMinutes();
+            totalKilometers += r.getDistanceCovered();
+            avgSeatCount += r.getAgents().size();
+            if(r.getAgents().size() == 1) {
+                aloneRides += 1;
+            }
+
             /*
             for(Agent a : r.getAgents()) {
                 if(agentToRides.containsKey(a)) {
@@ -147,6 +178,11 @@ public abstract class SDCTSP extends MobilityMode {
             }
              */
         }
+        System.out.println("Total Minutes Travelled: " + totalMinutes + "\n" +
+                "Total Kilometers Travelled: " + totalKilometers + "\n" +
+                "Average Seat Count: " + (avgSeatCount / rides.size()) + "\n" +
+                "Number of Rides alone: " + aloneRides);
+
     }
     public void computeStops(Ride ride) {
         double[] distPerAgent = new double[ride.getAgents().size()];

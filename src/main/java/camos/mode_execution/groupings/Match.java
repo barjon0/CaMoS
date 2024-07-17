@@ -34,6 +34,7 @@ public class Match extends Grouping implements Comparable{
         this.timeIntervalEnd = timeIntervalEnd;
         this.mobilityType = mobilityType;
         this.id = ++idCounter;
+        this.differentStops = differentStops;
     }
 
     public Match(List<Agent> agents, Requesttype isWayToWork) {

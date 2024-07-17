@@ -33,6 +33,7 @@ public class EverybodyDrives extends MobilityMode {
     public void prepareMode(List<Agent> agents){
 
         this.agents = new ArrayList<>(agents);
+        System.out.println(agents.size());
         for(Agent agent : agents){
             Request agentRequest = agent.getRequest();
             LocalDateTime driveStartTime = CommonFunctionHelper.calculateToUniDriveStartTime(agent.getRequest());
@@ -93,13 +94,26 @@ public class EverybodyDrives extends MobilityMode {
         Map<Set<Object>,Double> oneWayMinutesTravelled = this.getOneWayMinutesTravelled();
         Map<Agent, List<Ride>> agentToRides = this.getAgentToRides();
 
+        double totalMinutes = 0;
+        double totalKilometers = 0;
+
         List<String> dataLines = new ArrayList<>();
         dataLines.add("Agent Id,GesamtKilometer,GesamtMinuten,GesamtCO2,GesamtKosten,HinKilometer,HinMinuten,HinCO2,HinKosten,RueckKilometer,RueckMinuten,RueckCO2,RueckKosten");
         for(Agent a : kmTravelled.keySet()){
+
+            totalKilometers += kmTravelled.get(a);
+            totalMinutes += minutesTravelled.get(a);
+
             Ride toUniRide = agentToRides.get(a).get(0);
             Ride homeRide = agentToRides.get(a).get(1);
             dataLines.add(a.getId() + "," + kmTravelled.get(a) + "," + minutesTravelled.get(a) + "," + emissions.get(a) + "," + costs.get(a) + "," + oneWayKmTravelled.get(Set.of(toUniRide)) + "," + oneWayMinutesTravelled.get(Set.of(toUniRide)) + "," + oneWayEmissions.get(Set.of(toUniRide)) + "," + oneWayCosts.get(Set.of(toUniRide)) + "," + oneWayKmTravelled.get(Set.of(homeRide)) + "," + oneWayMinutesTravelled.get(Set.of(homeRide)) + "," + oneWayEmissions.get(Set.of(homeRide)) + "," + oneWayCosts.get(Set.of(homeRide)));
         }
+
+        System.out.println("Total Minutes Travelled: " + totalMinutes + "\n" +
+                "Total Kilometers Travelled: " + totalKilometers + "\n" +
+                "Average Seat Count: " + 1 + "\n" +
+                "Number of Rides alone: " + (2*agents.size()) + "\n" +
+                "Average Time Travelled: " + (totalMinutes / (2L * agents.size())));
 
         File csvOutputFile = new File("edResults.csv");
         try (PrintWriter pw = new PrintWriter(csvOutputFile)) {

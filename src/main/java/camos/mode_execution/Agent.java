@@ -10,6 +10,7 @@ import com.graphhopper.util.shapes.GHPoint;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class Agent {
     long id;
@@ -127,5 +128,18 @@ public class Agent {
 
     public void setWillingToUseAlternatives(boolean willingToUseAlternatives) {
         this.willingToUseAlternatives = willingToUseAlternatives;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Agent agent = (Agent) o;
+        return id == agent.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }

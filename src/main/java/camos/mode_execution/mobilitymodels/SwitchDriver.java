@@ -19,6 +19,7 @@ import java.io.PrintWriter;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.Comparator.comparingDouble;
 
@@ -34,39 +35,44 @@ public class SwitchDriver extends SDCTSP {
     @Override           //receives list of agents with requests of same day
     public void prepareMode(List<Agent> agents) {
         this.agents = agents;
-        System.out.println("before intervalgraph " + (System.nanoTime()/ 1_000_000) + "ms");
-        //make greedy time bubbles
-        List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs = IntervalGraph.buildIntervalGraph(agents);
-        List<List<Agent>> bubblesTo = IntervalGraph.cliqueCover(graphs.get(0));
-        System.out.println("made one-sided bubbles " + (System.nanoTime()/ 1_000_000) + "ms");
-        List<List<Agent>> bubblesFrom = IntervalGraph.cliqueCover(graphs.get(1));
+        System.out.println(agents.size());
+        Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
+                .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
+        for(List<Agent> oneTarget : agentsByTarget.values()) {
+            System.out.println("before intervalgraph " + (System.nanoTime() / 1_000_000) + "ms");
+            //make greedy time bubbles
+            List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs = IntervalGraph.buildIntervalGraph(oneTarget);
+            List<List<Agent>> bubblesTo = IntervalGraph.cliqueCover(graphs.get(0));
+            System.out.println("made one-sided bubbles " + (System.nanoTime() / 1_000_000) + "ms");
+            List<List<Agent>> bubblesFrom = IntervalGraph.cliqueCover(graphs.get(1));
 
-        System.out.println("before making clusters " + (System.nanoTime()/ 1_000_000) + "ms");
+            System.out.println("before making clusters " + (System.nanoTime() / 1_000_000) + "ms");
 
-        //make Cluster call
-        List<Match> clustersTo = new ArrayList<>();
-        List<Match> clustersFrom = new ArrayList<>();
-        bubblesTo.forEach(bubble -> clustersTo.addAll(makeCluster(bubble, Requesttype.DRIVETOUNI)));
-        System.out.println("one cluster side done" + (System.nanoTime()/ 1_000_000) + "ms");
-        bubblesFrom.forEach(bubble -> clustersFrom.addAll(makeCluster(bubble, Requesttype.DRIVEHOME)));
+            //make Cluster call
+            List<Match> clustersTo = new ArrayList<>();
+            List<Match> clustersFrom = new ArrayList<>();
+            bubblesTo.forEach(bubble -> clustersTo.addAll(makeCluster(bubble, Requesttype.DRIVETOUNI)));
+            System.out.println("one cluster side done" + (System.nanoTime() / 1_000_000) + "ms");
+            bubblesFrom.forEach(bubble -> clustersFrom.addAll(makeCluster(bubble, Requesttype.DRIVEHOME)));
 
-        System.out.println("before making matching " + (System.nanoTime()/ 1_000_000) + "ms");
-        List<List<Match>> matching = MaximumMatching.getMatching(clustersTo, clustersFrom);
+            System.out.println("before making matching " + (System.nanoTime() / 1_000_000) + "ms");
+            List<List<Match>> matching = MaximumMatching.getMatching(clustersTo, clustersFrom);
 
-        System.out.println("matching done " + (System.nanoTime()/ 1_000_000) + "ms");
-        matching.addAll(repairRest(clustersTo, Requesttype.DRIVETOUNI));
-        matching.addAll(repairRest(clustersFrom, Requesttype.DRIVEHOME));
-        System.out.println("repair done " + (System.nanoTime()/ 1_000_000) + "ms");
-        //find driver
-        matching.forEach(tuple -> {
-            List<Agent> intersect = tuple.get(0).getPossDrivers().stream().filter(tuple.get(1).getPossDrivers()::contains).toList();
-            Optional<Agent> driver = intersect.stream().max(comparingDouble(Agent::getDistanceToTarget));
-            tuple.get(0).setDriver(driver.get());
-            tuple.get(1).setDriver(driver.get());
-        });
-        resultMatch = new ArrayList<>(matching.stream()
-                .flatMap(List::stream)
-                .toList());
+            System.out.println("matching done " + (System.nanoTime() / 1_000_000) + "ms");
+            matching.addAll(repairRest(clustersTo, Requesttype.DRIVETOUNI));
+            matching.addAll(repairRest(clustersFrom, Requesttype.DRIVEHOME));
+            System.out.println("repair done " + (System.nanoTime() / 1_000_000) + "ms");
+            //find driver
+            matching.forEach(tuple -> {
+                List<Agent> intersect = tuple.get(0).getPossDrivers().stream().filter(tuple.get(1).getPossDrivers()::contains).toList();
+                Optional<Agent> driver = intersect.stream().max(comparingDouble(Agent::getDistanceToTarget));
+                tuple.get(0).setDriver(driver.get());
+                tuple.get(1).setDriver(driver.get());
+            });
+            resultMatch.addAll(matching.stream()
+                    .flatMap(List::stream)
+                    .toList());
+        }
         System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
     }
 

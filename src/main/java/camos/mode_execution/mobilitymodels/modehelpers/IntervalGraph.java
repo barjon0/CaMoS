@@ -3,15 +3,15 @@ package camos.mode_execution.mobilitymodels.modehelpers;
 import camos.mode_execution.Agent;
 import org.jgrapht.Graph;
 import org.jgrapht.alg.clique.ChordalGraphMaxCliqueFinder;
+import org.jgrapht.alg.clique.PivotBronKerboschCliqueFinder;
 import org.jgrapht.alg.interfaces.CliqueAlgorithm;
 import org.jgrapht.graph.AsSubgraph;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class IntervalGraph {
 
@@ -84,6 +84,17 @@ public class IntervalGraph {
             List<Agent> cliqueList = maxClique.stream().toList();
             cliqueList.forEach(Gi::removeVertex);
             result.add(cliqueList);
+        }
+        return result;
+    }
+
+    public static List<List<Agent>> getAllMaxCliques(DefaultUndirectedGraph<Agent, DefaultEdge> graph) {
+        List<List<Agent>> result = new ArrayList<>();
+        PivotBronKerboschCliqueFinder<Agent, DefaultEdge> finder =
+                new PivotBronKerboschCliqueFinder<>(graph, 30,
+        TimeUnit.MINUTES);
+        for (Set<Agent> agents : finder) {
+            result.add(agents.stream().toList());
         }
         return result;
     }

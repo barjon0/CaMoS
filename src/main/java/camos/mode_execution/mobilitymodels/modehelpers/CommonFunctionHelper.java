@@ -31,6 +31,7 @@ import camos.mode_execution.mobilitymodels.tsphelpers.ActivityWaitConstraintOneA
 import camos.mode_execution.mobilitymodels.tsphelpers.TransportCosts;
 import org.apache.commons.lang3.StringUtils;
 
+import java.awt.geom.Point2D;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -123,6 +124,26 @@ public class CommonFunctionHelper {
         GHRequest ghRequest = new GHRequest(ghPointStart,ghPointEnd).setProfile("car").setLocale(Locale.GERMANY);
 
         return graphHopper.route(ghRequest).getBest();
+    }
+
+    public static Point2D.Double convertToMercator(Coordinate coord) {
+        double x = Math.toRadians(coord.getLongitude());
+        double y = Math.log(Math.tan(Math.PI / 4 + Math.toRadians(coord.getLatitude()) / 2));
+
+        return new Point2D.Double(6371000 * x, 6371000 * y);
+    }
+
+    public static double angleWithVertical(Point2D target, Point2D point) {
+        // Calculate the slope of the segment
+        double slope = (point.getY() - target.getY()) / (point.getX() - target.getX());
+
+        // Calculate the angle with respect to the horizontal in radians
+        double theta = Math.atan(slope);
+
+        // Convert the angle to degrees
+        double thetaDegrees = Math.toDegrees(theta);
+
+        return 90 - thetaDegrees;
     }
 
     public static Long checkFeasTime(List<Agent> members) {
