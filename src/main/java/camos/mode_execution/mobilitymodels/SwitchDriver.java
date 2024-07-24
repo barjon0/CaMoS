@@ -1,6 +1,5 @@
 package camos.mode_execution.mobilitymodels;
 
-import camos.GeneralManager;
 import camos.mode_execution.Agent;
 import camos.mode_execution.Coordinate;
 import camos.mode_execution.Requesttype;
@@ -10,15 +9,14 @@ import camos.mode_execution.groupings.Ride;
 import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.modehelpers.IntervalGraph;
 import camos.mode_execution.mobilitymodels.modehelpers.MaximumMatching;
-import com.graphhopper.ResponsePath;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
 
 import java.io.File;
 import java.io.PrintWriter;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import static java.util.Comparator.comparingDouble;
@@ -36,8 +34,14 @@ public class SwitchDriver extends SDCTSP {
     public void prepareMode(List<Agent> agents) {
         this.agents = agents;
         System.out.println(agents.size());
+
+        int numberOfCores = Runtime.getRuntime().availableProcessors() - 1;
+        ExecutorService executorService = Executors.newFixedThreadPool(numberOfCores);
+        System.out.println(numberOfCores);
+
         Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
                 .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
+
         for(List<Agent> oneTarget : agentsByTarget.values()) {
             System.out.println("before intervalgraph " + (System.nanoTime() / 1_000_000) + "ms");
             //make greedy time bubbles
@@ -51,9 +55,35 @@ public class SwitchDriver extends SDCTSP {
             //make Cluster call
             List<Match> clustersTo = new ArrayList<>();
             List<Match> clustersFrom = new ArrayList<>();
-            bubblesTo.forEach(bubble -> clustersTo.addAll(makeCluster(bubble, Requesttype.DRIVETOUNI)));
-            System.out.println("one cluster side done" + (System.nanoTime() / 1_000_000) + "ms");
-            bubblesFrom.forEach(bubble -> clustersFrom.addAll(makeCluster(bubble, Requesttype.DRIVEHOME)));
+
+            List<Future<List<Match>>> threadListTo = new ArrayList<>();
+            for(List<Agent> bubbleTo : bubblesTo) {
+                Callable<List<Match>> listCallable = () -> makeCluster(bubbleTo, Requesttype.DRIVETOUNI);
+                Future<List<Match>> result = executorService.submit(listCallable);
+                threadListTo.add(result);
+            }
+            List<Future<List<Match>>> threadListFrom = new ArrayList<>();
+            for(List<Agent> bubbleFrom : bubblesFrom) {
+                Callable<List<Match>> listCallable = () -> makeCluster(bubbleFrom, Requesttype.DRIVEHOME);
+                Future<List<Match>> result = executorService.submit(listCallable);
+                threadListFrom.add(result);
+            }
+
+            threadListTo.forEach(ls -> {
+                try {
+                    clustersTo.addAll(ls.get());
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            threadListFrom.forEach(ls -> {
+                try {
+                    clustersFrom.addAll(ls.get());
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
 
             System.out.println("before making matching " + (System.nanoTime() / 1_000_000) + "ms");
             List<List<Match>> matching = MaximumMatching.getMatching(clustersTo, clustersFrom);
@@ -73,6 +103,7 @@ public class SwitchDriver extends SDCTSP {
                     .flatMap(List::stream)
                     .toList());
         }
+        executorService.shutdown();
         System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
     }
 

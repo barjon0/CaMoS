@@ -19,7 +19,14 @@ public class CplexSolver {
             //for each driver: sum of all routes (that contain him) = 1 for toWork and fromWork
             int numBinVars = toWorkRoutes.size() + fromWorkRoutes.size();
             IloNumVar[] binVars = cplex.boolVarArray(numBinVars);
-            cplex.addMinimize(cplex.sum(binVars));
+            IloLinearNumExpr objective = cplex.linearNumExpr();
+            for (int i = 0; i < toWorkRoutes.size(); i++) {
+                objective.addTerm(toWorkRoutes.get(i).getTimeInMinutes(), binVars[i]);
+            }
+            for (int i = 0; i < fromWorkRoutes.size(); i++) {
+                objective.addTerm(fromWorkRoutes.get(i).getTimeInMinutes(), binVars[i + toWorkRoutes.size()]);
+            }
+            cplex.addMinimize(objective);
 
             //go through each agent, check in which routes he is and where he drives, then create constraints
             for (Agent agent : agents) {
@@ -27,9 +34,6 @@ public class CplexSolver {
                 List<IloNumVar> varListToDriver = new ArrayList<>();
                 for (int j = 0; j < toWorkRoutes.size(); j++) {
                     RouteSet routeSet = toWorkRoutes.get(j);
-                    if (routeSet == null) {
-                        System.out.println("hI hello");
-                    }
                     if (routeSet.getMembers().contains(agent)) {
                         if (toWorkRoutes.get(j).getDriver() == agent) {
                             varListToDriver.add(binVars[j]);
@@ -96,6 +100,11 @@ public class CplexSolver {
             }
             List<RouteSet> result = new ArrayList<>(solutionTo);
             result.addAll(solutionFrom);
+            double time = 0;
+            for(RouteSet r: result) {
+                time += r.getTimeInMinutes();
+            }
+            System.out.println("This should be the time: " + time);
             cplex.close();
 
             return result;

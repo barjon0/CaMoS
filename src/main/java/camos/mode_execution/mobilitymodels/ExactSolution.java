@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import static java.util.Comparator.comparingDouble;
@@ -37,13 +38,17 @@ public class ExactSolution extends SDCTSP{
     }
 
     @Override
-    public void prepareMode(List<Agent> agents) throws Exception {
+    public void prepareMode(List<Agent> agents) {
 
         this.agents = agents;
         System.out.println("before enumerating " + (System.nanoTime()/ 1_000_000) + "ms");
 
         Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
                 .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
+
+        int numberOfCores = Runtime.getRuntime().availableProcessors() - 1;
+        ExecutorService executorService = Executors.newFixedThreadPool(numberOfCores);
+
         for(List<Agent> oneTarget : agentsByTarget.values()) {
 
                 System.out.println("starting one Target " + (System.nanoTime() / 1_000_000) + "ms");
@@ -55,17 +60,17 @@ public class ExactSolution extends SDCTSP{
                 allCliques.add(IntervalGraph.getAllMaxCliques(graphs.get(1)));
                 Requesttype requesttype = Requesttype.DRIVETOUNI;
                 */
-
+                List<Future<List<RouteSet>>> futureListTo = new ArrayList<>();
+                List<Future<List<RouteSet>>> futureListBack = new ArrayList<>();
                 List<List<Agent>> preClusters = makePreclusteringRadial(oneTarget);
                 for(List<Agent> preCluster : preClusters) {
-                    DefaultUndirectedGraph<Agent, DefaultEdge> shareGraphTo =
-                            buildShareGraph(preCluster, Requesttype.DRIVETOUNI);
-                    DefaultUndirectedGraph<Agent, DefaultEdge> shareGraphFrom =
-                            buildShareGraph(preCluster, Requesttype.DRIVEHOME);
-                    System.out.println("building Cliques to " + (System.nanoTime() / 1_000_000) + "ms");
-                    buildingCliques(shareGraphTo, Requesttype.DRIVETOUNI);
-                    System.out.println("building cliques from " + (System.nanoTime() / 1_000_000) + "ms");
-                    buildingCliques(shareGraphFrom, Requesttype.DRIVEHOME);
+                    Callable<List<RouteSet>> listCallable = () -> routeEnumerate(preCluster, Requesttype.DRIVETOUNI);
+                    Future<List<RouteSet>> result = executorService.submit(listCallable);
+                    futureListTo.add(result);
+
+                    Callable<List<RouteSet>> listCallableBack = () -> routeEnumerate(preCluster, Requesttype.DRIVEHOME);
+                    Future<List<RouteSet>> resultBack = executorService.submit(listCallableBack);
+                    futureListBack.add(resultBack);
                 }
                 /*
                 for (List<Agent> preCluster : preClusters) {
@@ -82,6 +87,23 @@ public class ExactSolution extends SDCTSP{
                 }
 
                  */
+
+            futureListTo.forEach(ls -> {
+                try {
+                    lookUpTo.addAll(ls.get());
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            futureListBack.forEach(ls -> {
+                try {
+                    lookUpFrom.addAll(ls.get());
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
             System.out.println("enumarating done for target " + (System.nanoTime() / 1_000_000) + "ms");
 
             List<RouteSet> sets = CplexSolver.solveProblem(lookUpTo, lookUpFrom, oneTarget);
@@ -95,25 +117,29 @@ public class ExactSolution extends SDCTSP{
             }
 
         }
-
+        executorService.shutdown();
         System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
 
     }
 
-    private void buildingCliques(DefaultUndirectedGraph<Agent, DefaultEdge> shareGraph, Requesttype isToWork) {
-        List<RouteSet> routeSetList;
-        if(isToWork == Requesttype.DRIVETOUNI) {
-            routeSetList = lookUpTo;
-        } else {
-            routeSetList = lookUpFrom;
-        }
+    private List<RouteSet> routeEnumerate(List<Agent> candidates, Requesttype isToWork) {
+
+        DefaultUndirectedGraph<Agent, DefaultEdge> shareGraphTo =
+                buildShareGraph(candidates, isToWork);
+
+        return buildingCliques(shareGraphTo, isToWork);
+    }
+    private List<RouteSet> buildingCliques(DefaultUndirectedGraph<Agent, DefaultEdge> shareGraph, Requesttype isToWork) {
+        List<RouteSet> routeSetList = new ArrayList<>();
 
         List<Set<Agent>> finalLastCliques = new ArrayList<>();
         shareGraph.vertexSet().forEach(v -> {
             Set<Agent> members = new HashSet<>();
             members.add(v);
             finalLastCliques.add(members);
-            routeSetList.add(new RouteSet(members.stream().toList(), v, isToWork));
+            long time = CommonFunctionHelper
+                    .computeTimeBetweenPoints(v.getHomePosition(), v.getRequest().getDropOffPosition());
+            routeSetList.add(new RouteSet(members.stream().toList(), v, time, isToWork));
         });
         List<Set<Agent>> lastCliques = finalLastCliques;
 
@@ -125,7 +151,7 @@ public class ExactSolution extends SDCTSP{
                 if(clique.stream().anyMatch(a -> a.getCar().getSeatCount() > finalK)) {
                     Iterator<Agent> iterator = clique.iterator();
                     Set<Agent> candidates = Graphs.neighborSetOf(shareGraph, iterator.next());
-                    while(iterator.hasNext()) {
+                    while(iterator.hasNext() && !candidates.isEmpty()) {
                         Agent nextAgent = iterator.next();
                         candidates = candidates.stream().filter(a ->
                                 Graphs.neighborSetOf(shareGraph, nextAgent).contains(a))
@@ -133,9 +159,9 @@ public class ExactSolution extends SDCTSP{
                     }
                     for (Agent candidate : candidates) {
                         //only expand candidate when he has bigger id -> every clique only looked at once
-                        Set<Agent> memberSet = new HashSet<>(clique);
-                        memberSet.add(candidate);
                         if (clique.stream().allMatch(u -> u.getId() < candidate.getId())) {
+                            Set<Agent> memberSet = new HashSet<>(clique);
+                            memberSet.add(candidate);
                             boolean found = false;
                             List<LocalDateTime> interval =
                                     CommonFunctionHelper.calculateInterval(memberSet.stream().toList(), isToWork);
@@ -152,11 +178,12 @@ public class ExactSolution extends SDCTSP{
                                         Long travelTime = CommonFunctionHelper.checkFeasTime(permut);
                                         if (travelTime != null) {
                                             if (rS == null) {
-                                                rS = new RouteSet(permut, driver, isToWork);
-                                                routeSetList.add(rS);
+                                                rS = new RouteSet(permut, driver, travelTime, isToWork);
                                                 found = true;
+                                                routeSetList.add(rS);
                                             } else {
                                                 if (rS.getTimeInMinutes() > travelTime) {
+                                                    rS.setTimeInMinutes(travelTime);
                                                     rS.setOrder(permut);
                                                 }
                                             }
@@ -177,6 +204,7 @@ public class ExactSolution extends SDCTSP{
             k += 1;
             System.out.println("CliqueSize is " + k);
         }
+        return routeSetList;
     }
 
     private DefaultUndirectedGraph<Agent, DefaultEdge> buildShareGraph(List<Agent> agents, Requesttype isToWork) {

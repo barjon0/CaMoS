@@ -2,9 +2,7 @@ package camos.mode_execution.groupings;
 
 import camos.mode_execution.Agent;
 import camos.mode_execution.Requesttype;
-import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 
-import java.time.LocalDateTime;
 import java.util.*;
 
 public class RouteSet extends Grouping{
@@ -12,11 +10,12 @@ public class RouteSet extends Grouping{
     List<Agent> order;
 
 
-    public RouteSet(List<Agent> members, Agent driver, Requesttype isToWork) {
+    public RouteSet(List<Agent> members, Agent driver, long timeInMinutes, Requesttype isToWork) {
         this.agents = members;
         this.driver = driver;
         this.typeOfGrouping = isToWork;
         this.order = members;
+        this.timeInMinutes = timeInMinutes;
 
     }
 
