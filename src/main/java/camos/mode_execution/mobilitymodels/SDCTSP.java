@@ -9,12 +9,21 @@ import camos.mode_execution.groupings.Stop;
 import camos.mode_execution.groupings.Stopreason;
 import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import com.graphhopper.ResponsePath;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.plot.CategoryPlot;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.renderer.category.CategoryItemRenderer;
+import org.jfree.chart.renderer.xy.XYItemRenderer;
+import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.data.statistics.HistogramDataset;
 
-import java.io.File;
-import java.io.PrintWriter;
+import java.awt.*;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public abstract class SDCTSP extends MobilityMode {
@@ -260,19 +269,19 @@ public abstract class SDCTSP extends MobilityMode {
             double kmTravelled = distPerAgent[i];
             double minutesTravelled = timePerAgent[i];
             double cost = distPerAgent[i]*agent.getCar().getConsumptionPerKm()*agent.getCar().getPricePerLiter();
-            if(emissionsBoth.containsKey(agent)) {
-               if(ride.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
-                   emissionsBoth.get(agent).add(0, emmison);
-                   kmTravelledBoth.get(agent).add(0, kmTravelled);
-                   minutesTravelledBoth.get(agent).add(0, minutesTravelled);
-                   costsBoth.get(agent).add(0, cost);
-               } else {
-                   emissionsBoth.get(agent).add(emmison);
-                   kmTravelledBoth.get(agent).add(kmTravelled);
-                   minutesTravelledBoth.get(agent).add(minutesTravelled);
-                   costsBoth.get(agent).add(cost);
-               }
+            if(agentToRides.containsKey(agent)) {
+                int pos = 1;
+                if(ride.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
+                    pos = 0;
+                }
+                emissionsBoth.get(agent).add(pos, emmison);
+                kmTravelledBoth.get(agent).add(pos, kmTravelled);
+                minutesTravelledBoth.get(agent).add(pos, minutesTravelled);
+                costsBoth.get(agent).add(pos, cost);
+                agentToRides.get(agent).add(pos, ride);
             } else {
+                List<Ride> rideList = new ArrayList<>();
+                rideList.add(ride);
                 List<Double> emList = new ArrayList<>();
                 emList.add(emmison);
                 List<Double> kmList = new ArrayList<>();
@@ -285,9 +294,109 @@ public abstract class SDCTSP extends MobilityMode {
                 kmTravelledBoth.put(agent, kmList);
                 minutesTravelledBoth.put(agent, mintravList);
                 costsBoth.put(agent, cosList);
+                agentToRides.put(agent, rideList);
             }
 
         }
         ride.setStops(stopList);
+    }
+
+    //calculate normalized time per shared agent (- x  /log(x)) (do this dependant on function) -> histogram by establishing some bins
+    public JFreeChart createTimeChart(int bins) {
+        List<Double> normTimes = new ArrayList<>();
+        for(Agent a: agents) {
+            List<Ride> rideList = agentToRides.get(a);
+            List<Double> times = kmTravelledBoth.get(a);
+            if(rideList.get(0).getAgents().size() > 1) {
+                double firstTime = times.get(0);
+                normTimes.add((firstTime - a.getMinTravelTime())
+                        / (a.getMaxTravelTimeInMinutes() - a.getMinTravelTime()));
+            }
+            if(rideList.get(1).getAgents().size() > 1) {
+                double firstTime = times.get(1);
+                normTimes.add((firstTime - a.getMinTravelTime())
+                        / (a.getMaxTravelTimeInMinutes() - a.getMinTravelTime()));
+            }
+        }
+        double[] dArray = new double[normTimes.size()];
+        for (int i = 0; i < dArray.length; i++) {
+            dArray[i] = normTimes.get(i);
+        }
+        HistogramDataset dataset = new HistogramDataset();
+        dataset.addSeries("Frequency", dArray, bins, 0.0, 1.0);
+        JFreeChart chart = ChartFactory.createHistogram(
+                "Normalized transport times with respect to max travel time",
+                "Normalized times",
+                "Frequency",
+                dataset
+        );
+        chart.removeLegend();
+        XYPlot plot = chart.getXYPlot();
+        XYItemRenderer renderer = plot.getRenderer();
+        plot.setShadowGenerator(null);
+        NumberAxis domainAxis = (NumberAxis) plot.getDomainAxis();
+        domainAxis.setRange(0.0, 1.0);
+        renderer.setSeriesPaint(0, Color.RED);
+        return chart;
+
+    }
+
+    //check straight-line distance to targets, mean number of passengers per 5km disks
+    //bar chart
+    public JFreeChart createDistanceChart(int bins) {
+        List<List<Double>> values = new ArrayList<>();
+        double maxDistance = 0;
+        double minDistance = 999999999;
+        for(Agent a : agents) {
+            List<Ride> rideList = agentToRides.get(a);
+            if(rideList.get(0).getDriver() == a) {
+                List<Double> tuple = new ArrayList<>();
+                double distance = a.getDistanceToTarget();
+                minDistance = Math.min(distance, minDistance);
+                maxDistance = Math.max(distance, maxDistance);
+                tuple.add(distance);
+                tuple.add((rideList.get(0).getAgents().size() + rideList.get(1).getAgents().size()) / 2.0);
+                values.add(tuple);
+            }
+        }
+        //sort into bins
+        double[] avgPerBin = new double[bins];
+
+        double binLength = (maxDistance - minDistance) / bins;
+        values = values.stream().sorted(Comparator.comparingDouble(obj -> obj.get(0))).collect(Collectors.toList());
+        int counter = 0;
+        int numbOfVals = 0;
+        int currBin = 1;
+        while (counter < values.size()) {
+            if(values.get(counter).get(0) <= ((currBin * binLength)+minDistance)) {
+                avgPerBin[currBin - 1] += values.get(counter).get(1);
+                numbOfVals++;
+                counter++;
+            } else {
+                avgPerBin[currBin - 1] = avgPerBin[currBin - 1] / numbOfVals;
+                numbOfVals = 0;
+                currBin++;
+            }
+        }
+        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+        for (int i = 0; i < avgPerBin.length; i++) {
+            dataset.addValue(avgPerBin[i], "Series1",
+                    ((Math.round(i*binLength*10)/10.0) + " - " + (Math.round((i+1) * binLength * 10) / 10.0)));
+        }
+        JFreeChart chart = ChartFactory.createBarChart(
+                "Distances to avg Seat Occupancy",  // Chart title
+                "Distance in km",                    // X-Axis label
+                "Average Seats used",                    // Y-Axis label
+                dataset,                    // Dataset
+                org.jfree.chart.plot.PlotOrientation.VERTICAL,
+                false,                       // Show legend
+                true,                       // Use tooltips
+                false                       // Configure chart to generate URLs
+        );
+        CategoryPlot plot = chart.getCategoryPlot();
+        CategoryItemRenderer renderer = plot.getRenderer();
+        renderer.setSeriesPaint(0, Color.BLUE);
+
+        return chart;
     }
 }

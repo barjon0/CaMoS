@@ -26,6 +26,8 @@
       "studentCarPricePerLiter" : "double",
       "student car seat count" : "integer",
       "time interval" : "long",
+      "disregardLocals" : "boolean",
+      "percentPassengers" : "integer",
       "stop time" : "long",
       "accepted ridesharing time" : "function of x"
     }
@@ -40,6 +42,8 @@
       "studentCarCo2EmissionPerLiter" : "double",
       "studentCarPricePerLiter" : "double",
       "student car seat count" : "integer",
+      "disregardLocals" : "boolean",
+      "percentPassengers" : "integer",
       "time interval" : "long",
       "stop time" : "long",
       "accepted ridesharing time" : "function of x"

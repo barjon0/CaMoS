@@ -4,6 +4,8 @@ import camos.mode_execution.ModeExecutionManager;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+
 public class StartHelpers {
 
     public static void readInConfigForModes(JSONObject config, JSONObject modejson, String[] modes){
@@ -68,6 +70,27 @@ public class StartHelpers {
         }
         modeObject.put("config",modeConfig);
        ModeExecutionManager.modeValues.put(modeName,modeObject);
+    }
+
+    public static String correctFilename(String path) {
+        File file = new File(path);
+        if(file.exists()) {
+            int pointPosition = path.lastIndexOf(".");
+            int count = 1;
+            String ending = path.substring(pointPosition);
+            String beginning = path.substring(0, pointPosition);
+
+            String nextPath = beginning + count + ending;
+            file = new File(nextPath);
+            while(file.exists()) {
+                count++;
+                nextPath = beginning + count + ending;
+                file = new File(nextPath);
+            }
+            return nextPath;
+        }
+        return path;
+
     }
 
 }

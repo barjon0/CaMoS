@@ -10,6 +10,8 @@ import camos.mode_execution.groupings.RouteSet;
 import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.modehelpers.CplexSolver;
 import camos.mode_execution.mobilitymodels.modehelpers.IntervalGraph;
+import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
+import org.jfree.chart.ChartUtils;
 import org.jgrapht.Graphs;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
@@ -405,7 +407,8 @@ public class ExactSolution extends SDCTSP{
         List<String> dataSingle = createSingleData();
         List<String> dataAccum = createAccumData();
 
-        File csvOutputFile = new File("accumResultsExact.csv");
+        String path1 = "output\\accumResultsExact.csv";
+        File csvOutputFile = new File(StartHelpers.correctFilename(path1));
         try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
             for(String data : dataAccum){
                 pw.println(data);
@@ -413,11 +416,28 @@ public class ExactSolution extends SDCTSP{
         }catch (Exception e){
             throw new RuntimeException(e.getMessage());
         }
-        File csvOutputFile2 = new File("singleResultsExact.csv");
+        String path2 = "output\\singleResultsExact.csv";
+        File csvOutputFile2 = new File(StartHelpers.correctFilename(path2));
         try (PrintWriter pw = new PrintWriter(csvOutputFile2)) {
             for(String data : dataSingle){
                 pw.println(data);
             }
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+
+        String path3 = "output\\exactTimeHist.png";
+        try {
+            File timeHist3 = new File(StartHelpers.correctFilename(path3));
+            ChartUtils.saveChartAsPNG(timeHist3, createTimeChart(20), 800, 600);
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+
+        String path4 = "output\\exactDistHist.png";
+        try {
+            File timeHist4 = new File(StartHelpers.correctFilename(path4));
+            ChartUtils.saveChartAsPNG(timeHist4, createDistanceChart(20), 800, 600);
         }catch (Exception e){
             throw new RuntimeException(e.getMessage());
         }

@@ -7,7 +7,7 @@ gradle/
 
 auxil/
 
-results/
+output/results/
 
 
 sources/map.geojson
@@ -52,4 +52,4 @@ bin/
 
 ### Mac OS ###
 .DS_Store
-/results/
+/output/results/

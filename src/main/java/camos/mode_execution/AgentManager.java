@@ -2,9 +2,10 @@ package camos.mode_execution;
 
 import camos.GeneralManager;
 import camos.mobilitydemand.AgentCollector;
+import camos.mode_execution.carmodels.StandInVehicle;
 import camos.mode_execution.carmodels.StudentVehicle;
+import camos.mode_execution.carmodels.Vehicle;
 import org.apache.commons.io.IOUtils;
-import org.geotools.filter.visitor.Mode;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.locationtech.jts.geom.CoordinateXY;
@@ -14,6 +15,7 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +37,7 @@ public class AgentManager {
                 for(Object postcodeObj : array){
                     org.json.JSONObject postcodeObject = (org.json.JSONObject) postcodeObj;
                     String postcode = postcodeObject.getString("postcode");
-                    if(postcodesWithRemainingNeededAgents.containsKey(postcode)){
+                    if(postcodesWithRemainingNeededAgents.containsKey(postcode) && (!GeneralManager.disregardLocals || checkIfNotWue(postcode))){
                         int numberOfAgentsToRetrieve = postcodesWithRemainingNeededAgents.get(postcode);
                         org.json.JSONArray agentArray = (org.json.JSONArray) postcodeObject.get("agents");
                         for(int i = 0; i < numberOfAgentsToRetrieve; i++){
@@ -50,8 +52,13 @@ public class AgentManager {
                                 Coordinate homePosition = new Coordinate(agentObject.getDouble("home location longitude"), agentObject.getDouble("home location latitude"));
                                 String uniPLZ = agentObject.getString("uni location");
                                 Agent agent;
-
-                                agent = new Agent(agentObject.getLong("agent id"), homePosition, new StudentVehicle());
+                                Vehicle vehicle;
+                                if(GeneralManager.random.nextInt() <= GeneralManager.percentPassengers) {
+                                    vehicle = new StandInVehicle();
+                                } else {
+                                    vehicle = new StudentVehicle();
+                                }
+                                agent = new Agent(agentObject.getLong("agent id"), homePosition, vehicle);
 
                                 Request request = new Request(agent, Requesttype.BOTH, postcode, uniPLZ, homePosition, ModeExecutionManager.turnUniPostcodeIntoCoordinate(uniPLZ));
 
@@ -109,6 +116,15 @@ public class AgentManager {
             e.printStackTrace();
         }
         return agents;
+    }
+
+    private static boolean checkIfNotWue(String plz) {
+        String[] wuePLZ = {"97070", "97072", "97074", "97076", "97078", "97080", "97082", "97084"};
+        String normPLZ = plz;
+        if (plz.length() > 5) {
+            normPLZ = normPLZ.substring(0, 5);
+        }
+        return !Arrays.asList(wuePLZ).contains(normPLZ);
     }
 
 }

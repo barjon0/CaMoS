@@ -37,6 +37,9 @@ dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation("org.jgrapht:jgrapht-core:1.5.2")
     implementation(files(cplexPath + "lib/cplex.jar"))
+    implementation("org.openjdk.nashorn:nashorn-core:15.4")
+    implementation("org.jfree:jfreechart:1.5.3")
+    implementation("org.jfree:jcommon:1.0.24")
 
 }
 

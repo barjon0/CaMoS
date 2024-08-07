@@ -9,7 +9,6 @@ import camos.mobilitydemand.PostcodeManager;
 import camos.mode_execution.mobilitymodels.MobilityMode;
 import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
 import org.apache.commons.io.IOUtils;
-import org.geotools.filter.visitor.Mode;
 import org.geotools.referencing.CRS;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -159,6 +158,9 @@ public class ModeExecutionManager {
         GeneralManager.centralCoordinate = new Coordinate(json.optJSONObject("centralCoordinate").getDouble("longitude"),json.optJSONObject("centralCoordinate").getDouble("latitude"));
         GeneralManager.countOfGroups = json.optInt("countOfGroups");
         GeneralManager.radiusToExclude = json.optDouble("radiusToExclude");
+        GeneralManager.disregardLocals = json.optBoolean("disregardLocals");
+        GeneralManager.percentPassengers = json.optInt("percentPassengers");
+
 
         GeneralManager.percentOfWillingStudents = json.optInt("percentWilling");
 

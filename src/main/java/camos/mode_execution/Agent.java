@@ -3,13 +3,9 @@ package camos.mode_execution;
 import camos.GeneralManager;
 import camos.mode_execution.carmodels.Vehicle;
 import camos.mode_execution.groupings.Grouping;
-import camos.mode_execution.groupings.Match;
 import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
-import com.graphhopper.GHRequest;
-import com.graphhopper.util.shapes.GHPoint;
-
-import java.util.ArrayList;
-import java.util.List;
+import javax.script.ScriptEngine;
+import javax.script.ScriptException;
 import java.util.Objects;
 
 public class Agent {
@@ -25,6 +21,8 @@ public class Agent {
     Grouping teamOfAgentTo;
     Grouping teamOfAgentFrom;
     double maxTravelTimeInMinutes;
+
+    double minTravelTime;
 
 
     public Agent(long id, Coordinate homePosition, Vehicle car) {
@@ -82,16 +80,22 @@ public class Agent {
         return request;
     }
 
-    public void setRequest(Request request) {
+    public void setRequest(Request request) throws ScriptException {
 
         this.request = request;
         distanceToTarget = request.dropOffPosition.computeDistance(this.homePosition);
-        double mintraveltimeMinutes = CommonFunctionHelper.computeTimeBetweenPoints(homePosition, this.request.dropOffPosition);
-        this.maxTravelTimeInMinutes = (Math.log(mintraveltimeMinutes + 1) / Math.log(1.2)) + mintraveltimeMinutes;
+        minTravelTime = CommonFunctionHelper.computeTimeBetweenPoints(homePosition, this.request.dropOffPosition);
+        ScriptEngine engine = GeneralManager.manager.getEngineByName("nashorn");
+        engine.put("x", minTravelTime);
+        this.maxTravelTimeInMinutes = (double) engine.eval(GeneralManager.acceptedDrivingTime);
     }
 
     public Vehicle getCar() {
         return car;
+    }
+
+    public double getMinTravelTime() {
+        return minTravelTime;
     }
 
     public void setCar(Vehicle car) {

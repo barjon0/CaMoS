@@ -8,6 +8,7 @@ import camos.mode_execution.groupings.Match;
 import camos.mode_execution.mobilitymodels.*;
 import org.opengis.referencing.operation.TransformException;
 
+import javax.script.ScriptEngineManager;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
@@ -28,9 +29,13 @@ public class GeneralManager {
     public static int preClusterSize;
 
     public static MobilityType compareMode = MobilityType.EVERYBODYDRIVES; //TODO
+
+    public static final ScriptEngineManager manager = new ScriptEngineManager();
     public static Random random = new Random(1234);
 
+    public static int percentPassengers;
 
+    public static boolean disregardLocals;
     public static double studentCarConsumptionPerKm;
     public static double studentCarCo2EmissionPerLiter;
     public static double studentCarPricePerLiter;

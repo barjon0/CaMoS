@@ -1,6 +1,6 @@
 package camos.mode_execution.mobilitymodels;
 
-import camos.mode_execution.groupings.Grouping;
+import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
 import com.graphhopper.ResponsePath;
 import camos.mode_execution.*;
 import camos.mode_execution.groupings.Ride;
@@ -115,7 +115,7 @@ public class EverybodyDrives extends MobilityMode {
                 "Number of Rides alone: " + (2*agents.size()) + "\n" +
                 "Average Time Travelled: " + (totalMinutes / (2L * agents.size())));
 
-        File csvOutputFile = new File("edResults.csv");
+        File csvOutputFile = new File(StartHelpers.correctFilename("output\\edResults.csv"));
         try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
             for(String data : dataLines){
                 pw.println(data);

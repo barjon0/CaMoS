@@ -5,6 +5,7 @@ import camos.GeneralManager;
 public class StandInVehicle extends Vehicle{
 
     public StandInVehicle() {
+        this.seatCount = 1;
         this.withDriver = true;
         this.co2EmissionPerLiter = GeneralManager.studentCarCo2EmissionPerLiter;
         this.pricePerLiter = GeneralManager.studentCarPricePerLiter*2;

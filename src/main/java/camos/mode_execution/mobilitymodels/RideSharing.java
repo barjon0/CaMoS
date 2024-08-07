@@ -1,5 +1,6 @@
 package camos.mode_execution.mobilitymodels;
 
+import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
 import com.graphhopper.GHRequest;
 import com.graphhopper.GHResponse;
 import com.graphhopper.ResponsePath;
@@ -334,7 +335,7 @@ public class RideSharing extends MobilityMode {
             dataLines.add(a.getId() + "," + agentToRides.get(a).get(0).getId() + "," + (agentToRides.get(a).size() > 1 ? agentToRides.get(a).get(1).getId() : -1) + "," + a.isWillingToUseAlternatives() + "," + toUni.getDriver().equals(a) + "," + (toUni.getAgents().size() == 1) + "," + (home != null && home.getAgents().size() == 1) + "," + lost.containsKey(a) + "," + kmTravelled.get(a) + "," + minutesTravelled.get(a) + "," + emissions.get(a) + "," + costs.get(a) + "," + oneWayKmTravelled.get(set) + "," + oneWayMinutesTravelled.get(set) + "," + oneWayEmissions.get(set) + "," + oneWayCosts.get(set) + "," + km + "," + min + "," + co2 + "," + cost);
         }
 
-        File csvOutputFile = new File("rsResults.csv");
+        File csvOutputFile = new File(StartHelpers.correctFilename("output\\rsResults.csv"));
         try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
             for(String data : dataLines){
                 pw.println(data);

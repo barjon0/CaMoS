@@ -9,6 +9,8 @@ import camos.mode_execution.groupings.Ride;
 import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.modehelpers.IntervalGraph;
 import camos.mode_execution.mobilitymodels.modehelpers.MaximumMatching;
+import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
+import org.jfree.chart.ChartUtils;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
 
@@ -173,13 +175,13 @@ public class SwitchDriver extends SDCTSP {
         int count = 0;
         potential = potential.stream().sorted(comparingDouble(obj -> (double) obj.get(2))).toList();
         while (count < potential.size()) {
-            System.out.println("length of potential is: " + potential.size());
+            //System.out.println("length of potential is: " + potential.size());
             Match m1 = (Match) potential.get(count).get(0);
             Match m2 = (Match) potential.get(count).get(1);
             count = count + 1;
             List<Agent> feasibleDrivers = getFeasibleDrivers(m1, m2);
             if (!feasibleDrivers.isEmpty()) {
-                System.out.println("done merge " + (System.nanoTime()/ 1_000_000) + "ms");
+                //System.out.println("done merge " + (System.nanoTime()/ 1_000_000) + "ms");
                 m1.addToTeam(m2.getAgents());
                 clusters.remove(m2);
                 m1.setPossDrivers(feasibleDrivers);
@@ -310,7 +312,8 @@ public class SwitchDriver extends SDCTSP {
         List<String> dataSingle = createSingleData();
         List<String> dataAccum = createAccumData();
 
-        File csvOutputFile = new File("accumResultsSwitch.csv");
+        String path1 = "output\\accumResultsSwitch.csv";
+        File csvOutputFile = new File(StartHelpers.correctFilename(path1));
         try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
             for(String data : dataAccum){
                 pw.println(data);
@@ -318,11 +321,27 @@ public class SwitchDriver extends SDCTSP {
         }catch (Exception e){
             throw new RuntimeException(e.getMessage());
         }
-        File csvOutputFile2 = new File("singleResultsSwitch.csv");
+        String path2 = "output\\singleResultsSwitch.csv";
+        File csvOutputFile2 = new File(StartHelpers.correctFilename(path2));
         try (PrintWriter pw = new PrintWriter(csvOutputFile2)) {
             for(String data : dataSingle){
                 pw.println(data);
             }
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+        String path3 = "output\\switchTimeHist.png";
+        try {
+            File timeHist3 = new File(StartHelpers.correctFilename(path3));
+            ChartUtils.saveChartAsPNG(timeHist3, createTimeChart(20), 800, 600);
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+
+        String path4 = "output\\switchDistHist.png";
+        try {
+            File timeHist4 = new File(StartHelpers.correctFilename(path4));
+            ChartUtils.saveChartAsPNG(timeHist4, createDistanceChart(20), 800, 600);
         }catch (Exception e){
             throw new RuntimeException(e.getMessage());
         }
