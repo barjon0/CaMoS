@@ -40,9 +40,6 @@ public class Coordinate {
         double avgLong = sumlong / coordinates.size();
         return new Coordinate(Math.toDegrees(avgLong), Math.toDegrees(avgLat));
     }
-    public static double distFunc(double distanceToTarget) {
-        return Math.log(distanceToTarget + 1) / Math.log(2);
-    }
     public double getLongitude() {
         return longitude;
     }

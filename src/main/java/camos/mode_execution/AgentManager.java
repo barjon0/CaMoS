@@ -6,10 +6,6 @@ import camos.mode_execution.carmodels.StandInVehicle;
 import camos.mode_execution.carmodels.StudentVehicle;
 import camos.mode_execution.carmodels.Vehicle;
 import org.apache.commons.io.IOUtils;
-import org.geotools.geometry.jts.JTS;
-import org.geotools.referencing.crs.DefaultGeographicCRS;
-import org.locationtech.jts.geom.CoordinateXY;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;

@@ -54,16 +54,10 @@ public class Match extends Grouping implements Comparable{
         computeCenter();
         this.partner = null;
         this.possDrivers = new ArrayList<>();
-        if(agents.size() == 1) {
-            possDrivers.add(agents.get(0));
-        }
     }
 
     public void setPossDrivers(List<Agent> possDrivers) {
         this.possDrivers = possDrivers;
-    }
-    public void addPossDriver(Agent d) {
-        possDrivers.add(d);
     }
 
     public int teamCount() {

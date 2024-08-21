@@ -32,31 +32,30 @@ public class SwitchDriver extends SDCTSP {
     public SwitchDriver() {
         super();
         this.resultMatch = new ArrayList<>();
-        long startTime = System.nanoTime();
     }
 
     @Override           //receives list of agents with requests of same day
     public void prepareMode(List<Agent> agents) {
         this.agents = agents;
 
-        System.out.println(agents.size());
+        System.out.println("There are :" + agents.size() + " overall.");
 
         int numberOfCores = Runtime.getRuntime().availableProcessors() - 1;
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfCores);
-        System.out.println(numberOfCores);
+        System.out.println("The program uses: " + numberOfCores + " cores.");
 
         Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
                 .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
 
         for(List<Agent> oneTarget : agentsByTarget.values()) {
-            System.out.println("before intervalgraph " + ((System.nanoTime() - startTime)/ 1_000_000) + "ms");
+            System.out.println("before intervalgraph");
             //make greedy time bubbles
             List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs = IntervalGraph.buildIntervalGraph(oneTarget);
             List<List<Agent>> bubblesTo = IntervalGraph.cliqueCover(graphs.get(0));
-            System.out.println("made one-sided bubbles " + ((System.nanoTime() - startTime)/ 1_000_000) + "ms");
+            System.out.println("made one-sided bubbles");
             List<List<Agent>> bubblesFrom = IntervalGraph.cliqueCover(graphs.get(1));
 
-            System.out.println("before making clusters " + ((System.nanoTime() - startTime)/ 1_000_000) + "ms");
+            System.out.println("before making clusters");
 
             //make Cluster call
             List<Match> clustersTo = new ArrayList<>();
@@ -91,13 +90,13 @@ public class SwitchDriver extends SDCTSP {
                 }
             });
 
-            System.out.println("before making matching " + ((System.nanoTime() - startTime)/ 1_000_000) + "ms");
+            System.out.println("before making matching");
             List<List<Match>> matching = MaximumMatching.getMatching(clustersTo, clustersFrom);
 
-            System.out.println("matching done " + ((System.nanoTime() - startTime)/ 1_000_000) + "ms");
+            System.out.println("matching done");
             matching.addAll(repairRest(clustersTo, Requesttype.DRIVETOUNI));
             matching.addAll(repairRest(clustersFrom, Requesttype.DRIVEHOME));
-            System.out.println("repair done " + ((System.nanoTime() - startTime)/ 1_000_000) + "ms");
+            System.out.println("repair done");
             //find driver
             matching.forEach(tuple -> {
                 List<Agent> intersect = tuple.get(0).getPossDrivers().stream().filter(tuple.get(1).getPossDrivers()::contains).toList();
@@ -110,7 +109,7 @@ public class SwitchDriver extends SDCTSP {
                     .toList());
         }
         executorService.shutdown();
-        System.out.println("preparing done " + ((System.nanoTime() - startTime)/ 1_000_000) + "ms");
+        System.out.println("preparing done");
     }
 
     private List<List<Match>> repairRest(List<Match> clusters, Requesttype isToWork) {
@@ -134,20 +133,14 @@ public class SwitchDriver extends SDCTSP {
                     possList = intersect;
                 }
                 if(opposingMatchMax == null) {
-                    System.out.println("hi??");
+                    throw new IllegalStateException("No possible Partner found");
                 }
             }
             opposingMatchMax.removeFromTeam(possList);
 
             Match nextMatch = new Match(possList, isToWork.getOpposite());
-            possList.forEach(a -> {
-                if (m1.getPossDrivers().contains(a)) {
-                    nextMatch.addPossDriver(a);
-                }
-                if(isToWork == Requesttype.DRIVETOUNI) {
-
-                }
-            });
+            //add possDrivers to new Match
+            nextMatch.setPossDrivers(CommonFunctionHelper.computePossDrivers(possList, possList));
             nextMatch.setPartner(m1);
             m1.setPartner(nextMatch);
             List<Match> pair = new ArrayList<>();
@@ -163,7 +156,9 @@ public class SwitchDriver extends SDCTSP {
         List<Match> clusters = new ArrayList<>(agents.stream().map(a -> {
             List<Agent> aList = new ArrayList<>();
             aList.add(a);
-            return new Match(aList, isToWork);
+            Match aMatch = new Match(aList, isToWork);
+            aMatch.setPossDrivers(aList);
+            return aMatch;
         }).toList());
 
         List<List<Object>> potential = new ArrayList<>();

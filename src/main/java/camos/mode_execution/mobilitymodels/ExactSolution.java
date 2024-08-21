@@ -526,7 +526,7 @@ public class ExactSolution extends SDCTSP{
         return result;
 
     }
-
+/*
     private List<List<List<Agent>>> makePreclusteringbyTime(List<Agent> agenList) {
         List<List<List<Agent>>> result = new ArrayList<>();
         List<DefaultUndirectedGraph<Agent, DefaultEdge>> graphs
@@ -537,85 +537,8 @@ public class ExactSolution extends SDCTSP{
         return result;
     }
 
-/*
-    private void buildUp(List<Agent> members, List<Agent> remaining, Requesttype isToWork, List<LocalDateTime> currInterval) {
-
-        Long minutes = CommonFunctionHelper.checkFeasTime(members);
-        Map<Integer, List<RouteSet>> lookUp;
-        RouteSet routeSet;
-        if (isToWork == Requesttype.DRIVETOUNI) {
-            lookUp = lookUpTo;
-        } else {
-            lookUp = lookUpFrom;
-        }
-        //check if route is feasible
-        if (minutes != null) {
-            //find routeset
-            boolean found = false;
-            int key = getHash(members);
-            List<RouteSet> list = lookUp.get(key);
-            //check if already list set up
-            if (list == null) {
-                //create new list
-                List<RouteSet> aList = new ArrayList<>();
-                lookUp.put(key, aList);
-                list = aList;
-            } else {
-                //go through existing list and check if set is there
-
-                for (RouteSet r : list) {
-                    if (r.getDriver() == members.get(0) && new HashSet<>(members).containsAll(r.getMembers())) {
-                        //check if permutation found is better, then before
-                        if (r.getTimeInMinutes() > minutes) {
-                            r.setTimeInMinutes(minutes);
-                            r.setOrder(members);
-                        }
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if (!found) {
-                routeSet = new RouteSet(members, members.get(0), isToWork);
-                routeSet.setTimeInMinutes(minutes);
-                routeSet.setOrder(members);
-                list.add(routeSet);
-            }
-            //check if more people fit in car, then continue recursive call
-            if (members.get(0).getCar().getSeatCount() > members.size()) {
-                List<Agent> nextRemain = new ArrayList<>(remaining);
-                for (int i = 0; i < remaining.size(); i++) {
-                    List<Agent> nextRoute = new ArrayList<>(members);
-                    nextRoute.add(remaining.get(i));
-
-                    List<LocalDateTime> interval =
-                            CommonFunctionHelper.calcDoub(
-                                    currInterval, CommonFunctionHelper.getTimeInterval(remaining.get(i), isToWork));
-                    //check if time interval fits
-                    if (interval != null) {
-                        List<Agent> specRemain = new ArrayList<>(nextRemain);
-                        specRemain.remove(remaining.get(i));
-                        buildUp(nextRoute, specRemain, isToWork, interval);
-                    } else {
-                        nextRemain.remove(remaining.get(i));
-                    }
-                }
-            }
-        }
-    }
-
  */
 
-    private int getHash(List<Agent> members) {
-        int value = 0;
-        Agent driver = members.get(0);
-        members = members.stream().sorted(Comparator.comparing(Agent::hashCode))
-                .collect(Collectors.toList());
-        for(Agent m: members) {
-            value = (value * 31 + m.hashCode()) % 10007;
-        }
-        return (driver.hashCode() + value) % 10007;
-    }
     @Override
     public void startMode() {
         for(RouteSet rs : foundRouteSets) {

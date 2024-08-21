@@ -1,6 +1,5 @@
 package camos.mode_execution.mobilitymodels;
 
-import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
 import com.graphhopper.GHRequest;
 import com.graphhopper.GHResponse;
 import com.graphhopper.ResponsePath;
@@ -20,7 +19,6 @@ import com.graphhopper.jsprit.core.problem.vehicle.VehicleImpl;
 import com.graphhopper.jsprit.core.problem.vehicle.VehicleType;
 import com.graphhopper.jsprit.core.problem.vehicle.VehicleTypeImpl;
 import com.graphhopper.jsprit.core.util.Solutions;
-import com.graphhopper.routing.Path;
 import com.graphhopper.util.shapes.GHPoint;
 import camos.GeneralManager;
 import camos.mode_execution.*;
@@ -33,9 +31,6 @@ import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.tsphelpers.ActivityOrderConstraint;
 import camos.mode_execution.mobilitymodels.tsphelpers.ActivityWaitConstraintOneAllowed;
 import camos.mode_execution.mobilitymodels.tsphelpers.TransportCosts;
-
-import java.io.File;
-import java.io.PrintWriter;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
