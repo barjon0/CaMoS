@@ -4,6 +4,7 @@ import camos.GeneralManager;
 import camos.mode_execution.*;
 import camos.mode_execution.carmodels.Vehicle;
 import camos.mode_execution.mobilitymodels.MobilityType;
+import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
@@ -75,9 +76,15 @@ public class Match extends Grouping implements Comparable{
 
     public void removeFromTeam(List<Agent> agentList) {
         this.agents.removeAll(agentList);
-        computeCenter();
-        Optional<Integer> seats = this.agents.stream().map(a -> a.getCar().getSeatCount()).max(Integer::compareTo);
-        seats.ifPresent(Integer -> this.maxSeats = Integer);
+        if(!agents.isEmpty()) {
+            //computeCenter();
+            Optional<Integer> seats = this.agents.stream().map(a -> a.getCar().getSeatCount()).max(Integer::compareTo);
+            seats.ifPresent(Integer -> this.maxSeats = Integer);
+            this.possDrivers = CommonFunctionHelper.computePossDrivers(agents, agents);
+            if (possDrivers.isEmpty()) {
+                throw new IllegalStateException("no possible drivers found for team");
+            }
+        }
     }
 
     public void addToTeam(List<Agent> agentList){

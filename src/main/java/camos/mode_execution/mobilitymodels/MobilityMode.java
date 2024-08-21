@@ -12,6 +12,7 @@ import camos.mode_execution.ModeExecutionManager;
 import camos.mode_execution.groupings.Ride;
 import com.graphhopper.ResponsePath;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -67,7 +68,7 @@ public abstract class MobilityMode {
 
     public abstract boolean checkIfConstraintsAreBroken(List<Agent> agents);
 
-    public abstract void writeResultsToFile();
+    public abstract void writeResultsToFile() throws IOException;
 
     public abstract List<Ride> returnFinishedRides();
 

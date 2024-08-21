@@ -11,11 +11,13 @@ import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import com.graphhopper.ResponsePath;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.CategoryAxis;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.CategoryPlot;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.category.CategoryItemRenderer;
 import org.jfree.chart.renderer.xy.XYItemRenderer;
+import org.jfree.chart.ui.RectangleInsets;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.statistics.HistogramDataset;
 
@@ -66,8 +68,7 @@ public abstract class SDCTSP extends MobilityMode {
 
     @Override
     public boolean checkIfConstraintsAreBroken(List<Agent> agents) {
-        //checks if everyone has exactly one ride to and from, intervals fit, capacities fit, drivers match,
-        //does not check if maximum drive time is held up
+        //checks if everyone has exactly one ride to and from, intervals fit, capacities fit, drivers match, and if max travel time is upheld
         Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
                 .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
         Map<Coordinate, List<Ride>> ridesByTarget = rides.stream().collect(Collectors.groupingBy(r -> {
@@ -149,7 +150,7 @@ public abstract class SDCTSP extends MobilityMode {
     }
 
     public void calculateMetrics() {
-        long totalMinutes = 0;
+        double totalMinutes = 0;
         double totalKilometers = 0;
         double avgSeatCount = 0;
         int aloneRides = 0;
@@ -161,9 +162,9 @@ public abstract class SDCTSP extends MobilityMode {
             costsRide.put(r, r.getDistanceCovered()*r.getDriver().getCar().getConsumptionPerKm()
                     *r.getDriver().getCar().getPricePerLiter());
             kmTravelledRide.put(r, r.getDistanceCovered());
-            minutesRide.put(r, (double) Duration.between(
-                    r.getStartTime(), r.getEndTime()).toMinutes());
-            totalMinutes += Duration.between(r.getStartTime(), r.getEndTime()).toMinutes();
+            minutesRide.put(r, Duration.between(
+                    r.getStartTime(), r.getEndTime()).toSeconds() / 60.0);
+            totalMinutes += (Duration.between(r.getStartTime(), r.getEndTime()).toSeconds() / 60.0);
             totalKilometers += r.getDistanceCovered();
             avgSeatCount += r.getAgents().size();
             if(r.getAgents().size() == 1) {
@@ -203,22 +204,23 @@ public abstract class SDCTSP extends MobilityMode {
 
         if(ride.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
             for (int i = 1; i < ride.getAgents().size(); i++) {
-                if (lastStop != null && lastStop.getStopCoordinate() == ride.getAgents().get(i).getHomePosition()) {
+                if (lastStop != null && lastStop.getStopCoordinate().equalValue(ride.getAgents().get(i).getHomePosition())) {
                     lastStop.getPersonsInQuestion().add(ride.getAgents().get(i));
+                } else {
+                    ResponsePath pw = CommonFunctionHelper
+                            .getSimpleBestGraphhopperPath(lastPosition, ride.getAgents().get(i).getHomePosition());
+                    for (int j = 0; j < i; j++) {
+                        distPerAgent[j] += (pw.getDistance() / 1000.0);
+                        timePerAgent[j] += (pw.getTime() / 60000.0) + GeneralManager.stopTime;
+                    }
+                    LocalDateTime arrivTime = lastStopTime.plusSeconds(Math.round(pw.getTime() / 1000.0));
+                    lastStopTime = arrivTime.plusMinutes(GeneralManager.stopTime);
+                    lastPosition = ride.getAgents().get(i).getHomePosition();
+                    List<Agent> agentList = new ArrayList<>();
+                    agentList.add(ride.getAgents().get(i));
+                    lastStop = new Stop(arrivTime, lastStopTime, lastPosition, Stopreason.getReason(ride.getTypeOfGrouping()), agentList);
+                    stopList.add(lastStop);
                 }
-                ResponsePath pw = CommonFunctionHelper
-                        .getSimpleBestGraphhopperPath(lastPosition, ride.getAgents().get(i).getHomePosition());
-                for (int j = 0; j < i; j++) {
-                    distPerAgent[j] += (pw.getDistance() / 1000.0);
-                    timePerAgent[j] += (pw.getTime() / 60000.0);
-                }
-                LocalDateTime arrivTime = lastStopTime.plusMinutes(pw.getTime() / 60000L);
-                lastStopTime= arrivTime.plusMinutes(GeneralManager.stopTime);
-                lastPosition = ride.getAgents().get(i).getHomePosition();
-                List<Agent> agentList = new ArrayList<>();
-                agentList.add(ride.getAgents().get(i));
-                lastStop = new Stop(arrivTime, lastStopTime, lastPosition, Stopreason.getReason(ride.getTypeOfGrouping()), agentList);
-                stopList.add(lastStop);
             }
             ResponsePath lastPart = CommonFunctionHelper
                     .getSimpleBestGraphhopperPath(ride.getAgents()
@@ -231,22 +233,23 @@ public abstract class SDCTSP extends MobilityMode {
             ride.setDistanceCovered(distPerAgent[0]);
         } else {
             for (int i = 0; i < ride.getAgents().size() - 1; i++) {
-                if (lastStop != null && lastStop.getStopCoordinate() == ride.getAgents().get(i).getHomePosition()) {
+                if (lastStop != null && lastStop.getStopCoordinate().equalValue(ride.getAgents().get(i).getHomePosition())) {
                     lastStop.getPersonsInQuestion().add(ride.getAgents().get(i));
+                } else {
+                    ResponsePath pw = CommonFunctionHelper
+                            .getSimpleBestGraphhopperPath(ride.getAgents().get(i).getHomePosition(), lastPosition);
+                    for (int j = distPerAgent.length - 1; j > i - 1; j--) {
+                        distPerAgent[j] += (pw.getDistance() / 1000.0);
+                        timePerAgent[j] += (pw.getTime() / 60000.0) + GeneralManager.stopTime;
+                    }
+                    LocalDateTime arrivTime = lastStopTime.plusSeconds(Math.round(pw.getTime() / 1000.0));
+                    lastStopTime = arrivTime.plusMinutes(GeneralManager.stopTime);
+                    lastPosition = ride.getAgents().get(i).getHomePosition();
+                    List<Agent> agentList = new ArrayList<>();
+                    agentList.add(ride.getAgents().get(i));
+                    lastStop = new Stop(arrivTime, lastStopTime, lastPosition, Stopreason.getReason(ride.getTypeOfGrouping()), agentList);
+                    stopList.add(lastStop);
                 }
-                ResponsePath pw = CommonFunctionHelper
-                        .getSimpleBestGraphhopperPath(lastPosition, ride.getAgents().get(i).getHomePosition());
-                for (int j = distPerAgent.length - 1; j > i - 1 ; j--) {
-                    distPerAgent[j] += (pw.getDistance() / 1000.0);
-                    timePerAgent[j] += (pw.getTime() / 60000.0);
-                }
-                LocalDateTime arrivTime = lastStopTime.plusMinutes(pw.getTime() / 60000L);
-                lastStopTime= arrivTime.plusMinutes(GeneralManager.stopTime);
-                lastPosition = ride.getAgents().get(i).getHomePosition();
-                List<Agent> agentList = new ArrayList<>();
-                agentList.add(ride.getAgents().get(i));
-                lastStop = new Stop(arrivTime, lastStopTime, lastPosition, Stopreason.getReason(ride.getTypeOfGrouping()), agentList);
-                stopList.add(lastStop);
             }
             Coordinate secondLast;
             if (ride.getAgents().size() == 1) {
@@ -255,7 +258,7 @@ public abstract class SDCTSP extends MobilityMode {
                 secondLast = ride.getAgents().get(ride.getAgents().size() - 2).getHomePosition();
             }
             ResponsePath lastPart = CommonFunctionHelper
-                    .getSimpleBestGraphhopperPath(secondLast, ride.getEndPosition());
+                    .getSimpleBestGraphhopperPath(ride.getEndPosition(), secondLast);
 
             distPerAgent[distPerAgent.length - 1] += (lastPart.getDistance() / 1000.0);
             timePerAgent[timePerAgent.length - 1] += (lastPart.getTime() / 60000.0);
@@ -303,19 +306,28 @@ public abstract class SDCTSP extends MobilityMode {
 
     //calculate normalized time per shared agent (- x  /log(x)) (do this dependant on function) -> histogram by establishing some bins
     public JFreeChart createTimeChart(int bins) {
+        System.out.println("Number of rides total: " + rides.size());
         List<Double> normTimes = new ArrayList<>();
+        int zeroCounter = 0;
         for(Agent a: agents) {
-            List<Ride> rideList = agentToRides.get(a);
-            List<Double> times = kmTravelledBoth.get(a);
-            if(rideList.get(0).getAgents().size() > 1) {
-                double firstTime = times.get(0);
-                normTimes.add((firstTime - a.getMinTravelTime())
-                        / (a.getMaxTravelTimeInMinutes() - a.getMinTravelTime()));
-            }
-            if(rideList.get(1).getAgents().size() > 1) {
-                double firstTime = times.get(1);
-                normTimes.add((firstTime - a.getMinTravelTime())
-                        / (a.getMaxTravelTimeInMinutes() - a.getMinTravelTime()));
+            List<Double> times = minutesTravelledBoth.get(a);
+            for (int i : new int[]{0, 1}) {
+                double firstTime = times.get(i);
+                double normTime = (firstTime - a.getMinTravelTime())
+                        / (a.getMaxTravelTimeInMinutes() - a.getMinTravelTime());
+                if(normTime > 1) {
+                    //throw new IllegalStateException("Time is longer than max travel time by: " + (firstTime - a.getMaxTravelTimeInMinutes()));
+                    System.out.println("Time is longer than max travel time by: " + (firstTime - a.getMaxTravelTimeInMinutes()));
+                    normTime = 1;
+                } else if (normTime < 0) {
+                    //throw new IllegalStateException("Time is shorter then shortest travel time by " + (a.getMinTravelTime() - firstTime));
+                    System.out.println("Time is shorter then shortest travel time by " + (a.getMinTravelTime() - firstTime));
+                    normTime = 0;
+                    zeroCounter++;
+                } else if (normTime == 0.0) {
+                    zeroCounter++;
+                }
+                normTimes.add(normTime);
             }
         }
         double[] dArray = new double[normTimes.size()];
@@ -336,7 +348,9 @@ public abstract class SDCTSP extends MobilityMode {
         plot.setShadowGenerator(null);
         NumberAxis domainAxis = (NumberAxis) plot.getDomainAxis();
         domainAxis.setRange(0.0, 1.0);
+
         renderer.setSeriesPaint(0, Color.RED);
+        System.out.println("Number of users without any deviation: " + zeroCounter);
         return chart;
 
     }
@@ -378,10 +392,12 @@ public abstract class SDCTSP extends MobilityMode {
                 currBin++;
             }
         }
+        avgPerBin[avgPerBin.length - 1] = avgPerBin[avgPerBin.length - 1] / numbOfVals;
+
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
         for (int i = 0; i < avgPerBin.length; i++) {
             dataset.addValue(avgPerBin[i], "Series1",
-                    ((Math.round(i*binLength*10)/10.0) + " - " + (Math.round((i+1) * binLength * 10) / 10.0)));
+                    (Math.round(minDistance + (binLength*i)) + "-" + (Math.round(minDistance + (binLength*(i+1))))));
         }
         JFreeChart chart = ChartFactory.createBarChart(
                 "Distances to avg Seat Occupancy",  // Chart title
@@ -393,7 +409,9 @@ public abstract class SDCTSP extends MobilityMode {
                 true,                       // Use tooltips
                 false                       // Configure chart to generate URLs
         );
+
         CategoryPlot plot = chart.getCategoryPlot();
+        //plot.setInsets(new RectangleInsets(10,10,10,50));
         CategoryItemRenderer renderer = plot.getRenderer();
         renderer.setSeriesPaint(0, Color.BLUE);
 

@@ -12,6 +12,10 @@ public class CplexSolver {
 
     public static List<RouteSet> solveProblem(List<RouteSet> toWorkRoutes, List<RouteSet> fromWorkRoutes, List<Agent> agents) {
         try (IloCplex cplex = new IloCplex()){
+            cplex.setParam(IloCplex.Param.MIP.Tolerances.MIPGap, 0.001);
+            cplex.setParam(IloCplex.Param.MIP.Limits.Nodes, 60000);
+            cplex.setParam(IloCplex.Param.MIP.Strategy.File, 2);
+            cplex.setParam(IloCplex.Param.TimeLimit, 3600);
             //array of variables one for each route
             //min number of routes
             //for each driver: number of in and out routes equal
@@ -100,11 +104,8 @@ public class CplexSolver {
             }
             List<RouteSet> result = new ArrayList<>(solutionTo);
             result.addAll(solutionFrom);
-            double time = 0;
-            for(RouteSet r: result) {
-                time += r.getTimeInMinutes();
-            }
-            System.out.println("This should be the time: " + time);
+            System.out.println("The number of node was: " + cplex.getNnodes());
+            System.out.println("CPU time spent: " + cplex.getCplexTime() + " seconds");
             cplex.close();
 
             return result;

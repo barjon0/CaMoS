@@ -83,11 +83,15 @@ public class Agent {
     public void setRequest(Request request) throws ScriptException {
 
         this.request = request;
-        distanceToTarget = request.dropOffPosition.computeDistance(this.homePosition);
-        minTravelTime = CommonFunctionHelper.computeTimeBetweenPoints(homePosition, this.request.dropOffPosition);
+        minTravelTime = (CommonFunctionHelper.getSimpleBestGraphhopperPath(homePosition, this.request.dropOffPosition).getTime() / 60000.0);
         ScriptEngine engine = GeneralManager.manager.getEngineByName("nashorn");
         engine.put("x", minTravelTime);
         this.maxTravelTimeInMinutes = (double) engine.eval(GeneralManager.acceptedDrivingTime);
+        this.willingToRideInMinutes = (long) this.maxTravelTimeInMinutes;
+    }
+
+    public void setDistanceToTarget(double distanceToTarget) {
+        this.distanceToTarget = distanceToTarget;
     }
 
     public Vehicle getCar() {

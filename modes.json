@@ -51,8 +51,7 @@
   },
   "Ridesharing" : {
     "class name" : "RideSharing",
-    "comparing" : "true",
-    "compare to" : "EverybodyDrives",
+    "comparing" : "false",
     "config" : {
       "student car seat count" : "integer",
       "percentWilling" : "integer",

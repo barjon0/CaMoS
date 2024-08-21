@@ -14,14 +14,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class AgentManager {
 
     public static List<Agent> readAgentsWithRequestData(String filePathToAllAgents, String filePathToAgentCountInRange) {
+        Random secRandom = new Random(10203040);
         List<Object> maps = AgentCollector.createPostcodeToNeededAgentsMap(filePathToAgentCountInRange);
         Map<String,Integer> postcodesWithRemainingNeededAgents = (Map<String, Integer>) maps.get(0);
         List<Agent> agents = new ArrayList<>();
@@ -53,14 +51,14 @@ public class AgentManager {
                                 String uniPLZ = agentObject.getString("uni location");
                                 Agent agent;
                                 Vehicle vehicle;
-                                if(GeneralManager.random.nextInt() <= GeneralManager.percentPassengers) {
+                                if((secRandom.nextInt(high-low) + low) <= GeneralManager.percentPassengers) {
                                     vehicle = new StandInVehicle();
                                 } else {
                                     vehicle = new StudentVehicle();
                                 }
                                 agent = new Agent(agentObject.getLong("agent id"), homePosition, vehicle);
-
-                                Request request = new Request(agent, Requesttype.BOTH, postcode, uniPLZ, homePosition, ModeExecutionManager.turnUniPostcodeIntoCoordinate(uniPLZ));
+                                Coordinate uniPosition = ModeExecutionManager.turnUniPostcodeIntoCoordinate(uniPLZ);
+                                Request request = new Request(agent, Requesttype.BOTH, postcode, uniPLZ, homePosition, uniPosition);
 
                                 try {
                                     String departureTimeString = "02.02.2023 " + agentObject.getString("departure time");
@@ -90,17 +88,14 @@ public class AgentManager {
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }
-
+                                double distance = homePosition.computeDistance(uniPosition);
                                 if (GeneralManager.plzRadius) {
+                                    agent.setDistanceToTarget(distance);
                                     agent.setRequest(request);
                                     agents.add(agent);
                                 } else {
-                                    org.locationtech.jts.geom.Coordinate homeCoordinate = new CoordinateXY(agent.getHomePosition().getLongitude(), agent.getHomePosition().getLatitude());
-                                    org.locationtech.jts.geom.Coordinate campusCoordinate = new CoordinateXY(request.getDropOffPosition().getLongitude(), request.getDropOffPosition().getLatitude());
-
-                                    double distance = JTS.orthodromicDistance(homeCoordinate, campusCoordinate, DefaultGeographicCRS.WGS84);
-                                    distance = distance / 1000;
                                     if (distance <= GeneralManager.upperRadius && distance >= GeneralManager.lowerRadius) {
+                                        agent.setDistanceToTarget(distance);
                                         agent.setRequest(request);
                                         agents.add(agent);
                                     }

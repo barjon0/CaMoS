@@ -55,7 +55,7 @@ public class PostcodeManager {
      * This function fills the static postcodePolygon map of this class with the corresponding polygon to each postcode given in the OSM file
      * */
     public static void makePostcodePolygonMap() throws IOException {
-        File file = new File("sources\\Postleitzahlengebiete_-_OSM\\OSM_PLZ.shp");
+        File file = new File("sources/Postleitzahlengebiete_-_OSM/OSM_PLZ.shp");
         Map<String, Object> map = new HashMap<>();
         map.put("url", file.toURI().toURL());
 

@@ -64,6 +64,27 @@ public class CommonFunctionHelper {
         }
         return interval;
     }
+
+    public static List<Agent> computePossDrivers(List<Agent> allAgents, List<Agent> possDriversBefore) {
+        List<Agent> result = new ArrayList<>();
+
+        possDriversBefore = possDriversBefore.stream().filter(a -> a.getCar().getSeatCount() >= allAgents.size()).toList();
+
+        for (Agent driver : possDriversBefore) {
+            //with only one driver incorrect results...
+            List<List<Agent>> permutations = CommonFunctionHelper.getPermut(allAgents.stream().filter(a -> a != driver).toList());
+            for (List<Agent> permut : permutations) {
+                List<Agent> permuList = new ArrayList<>(permut);
+                permuList.add(0, driver);
+                Double time = CommonFunctionHelper.checkFeasTime(permuList);
+                if (time != null) {
+                    result.add(driver);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
     public static List<LocalDateTime> calculateInterval(List<Agent> members, Requesttype isToWork) {
         if (members.size() == 2) {
             List<LocalDateTime> tupleFirst = getTimeInterval(members.get(0), isToWork);
@@ -102,6 +123,11 @@ public class CommonFunctionHelper {
 
     public static List<List<Agent>> getPermut(List<Agent> agents) {
         List<List<Agent>> res = new ArrayList<>();
+        if (agents.isEmpty()) {
+            List<Agent> only = new ArrayList<>();
+            res.add(only);
+            return res;
+        }
         if (agents.size() == 1) {
             List<Agent> only = new ArrayList<>();
             only.add(agents.get(0));
@@ -146,14 +172,19 @@ public class CommonFunctionHelper {
         return 90 - thetaDegrees;
     }
 
-    public static Long checkFeasTime(List<Agent> members) {
+    public static Double checkFeasTime(List<Agent> members) {
         List<Coordinate> coords = new ArrayList<>(members.stream().map(Agent::getHomePosition).toList());
         coords.add(members.get(0).getRequest().getDropOffPosition());
-        long[] totalTraveltime = new long[members.size()];
+        double[] totalTraveltime = new double[members.size()];
         for (int i = 0; i < coords.size() - 1; i++) {
-            long timeMin = computeTimeBetweenPoints(coords.get(i), coords.get(i + 1));
+            double addedTime;
+            if(coords.get(i).equalValue(coords.get(i + 1))) {
+                addedTime = 0;
+            } else {
+                addedTime = (getSimpleBestGraphhopperPath(coords.get(i), coords.get(i + 1)).getTime() / 60000.0) + GeneralManager.stopTime;
+            }
             for (int j = 0; j < i + 1; j++) {
-                totalTraveltime[j] = (totalTraveltime[j] + timeMin + GeneralManager.stopTime);
+                totalTraveltime[j] = (totalTraveltime[j] + addedTime);
             }
         }
         for (int i = 0; i < members.size(); i++) {
@@ -334,16 +365,6 @@ public class CommonFunctionHelper {
                 }
             }
         }
-    }
-
-    public static long computeTimeBetweenPoints(Coordinate one, Coordinate two) {
-        List<GHPoint> pointList = new ArrayList<>();
-        pointList.add(new GHPoint(one.getLatitude(), one.getLongitude()));
-        pointList.add(new GHPoint(two.getLatitude(), two.getLongitude()));
-        GHRequest req = new GHRequest(pointList);
-        req.setProfile("car");
-        GHResponse response = graphHopper.route(req);
-        return (response.getBest().getTime() / 60000);
     }
 
 

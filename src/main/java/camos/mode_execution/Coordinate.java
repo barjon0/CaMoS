@@ -4,6 +4,10 @@ import java.util.List;
 import java.util.Objects;
 
 import com.graphhopper.jsprit.core.problem.Location;
+import org.geotools.geometry.jts.JTS;
+import org.geotools.referencing.crs.DefaultGeographicCRS;
+import org.locationtech.jts.geom.CoordinateXY;
+import org.opengis.referencing.operation.TransformException;
 
 public class Coordinate {
 
@@ -17,13 +21,13 @@ public class Coordinate {
     }
 
     //computes distance in km of this and other coordinate
-    public double computeDistance(Coordinate other) {
-        double dlong = (other.longitude - this.longitude) * (Math.PI / 180D);
-        double dlat = (other.latitude - this.latitude) * (Math.PI / 180D);
-        double a = Math.pow(Math.sin(dlat / 2D), 2D) + Math.cos(this.latitude * (Math.PI / 180D)) *
-                Math.cos(other.latitude * (Math.PI / 180D)) * Math.pow(Math.sin(dlong / 2D), 2D);
-        double c = 2D * Math.atan2(Math.sqrt(a), Math.sqrt(1D - a));
-        return 6378.1370D * c;
+    public double computeDistance(Coordinate other) throws TransformException {
+        org.locationtech.jts.geom.Coordinate oneCoordinate = new CoordinateXY(this.longitude, this.latitude);
+        org.locationtech.jts.geom.Coordinate otherCoordinate = new CoordinateXY(other.longitude, other.latitude);
+
+        double distance = JTS.orthodromicDistance(oneCoordinate, otherCoordinate, DefaultGeographicCRS.WGS84);
+        return (distance / 1000);
+
     }
     public static Coordinate computeCenter(List<Coordinate> coordinates) {
         double sumlat = 0;
@@ -63,12 +67,15 @@ public class Coordinate {
         this.code = code;
     }
 
+    public boolean equalValue(Coordinate other) {
+        return this.longitude == other.longitude && this.latitude == other.latitude;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Coordinate that = (Coordinate) o;
-        return Double.compare(longitude, that.longitude) == 0 && Double.compare(latitude, that.latitude) == 0;
+        return false;
     }
 
     @Override
