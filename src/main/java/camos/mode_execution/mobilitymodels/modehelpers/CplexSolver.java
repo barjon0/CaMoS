@@ -1,9 +1,12 @@
 package camos.mode_execution.mobilitymodels.modehelpers;
 import camos.mode_execution.Agent;
+import camos.mode_execution.Requesttype;
+import camos.mode_execution.groupings.Ride;
 import camos.mode_execution.groupings.RouteSet;
 import ilog.cplex.*;
 import ilog.concert.*;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -11,10 +14,14 @@ import java.util.List;
 public class CplexSolver {
 
     public static List<RouteSet> solveProblem(List<RouteSet> toWorkRoutes, List<RouteSet> fromWorkRoutes, List<Agent> agents) {
+
         try (IloCplex cplex = new IloCplex()){
-            cplex.setParam(IloCplex.Param.MIP.Tolerances.MIPGap, 0.001);
-            cplex.setParam(IloCplex.Param.MIP.Limits.Nodes, 60000);
-            cplex.setParam(IloCplex.Param.MIP.Strategy.File, 2);
+            long usedMem = Runtime.getRuntime().totalMemory() / 1048576;
+            System.out.println("At the moment there is " + usedMem + " MB used by jvm");
+
+            cplex.setParam(IloCplex.Param.MIP.Tolerances.MIPGap, 0.01);
+            cplex.setParam(IloCplex.Param.WorkMem, 8000 - usedMem);
+            cplex.setParam(IloCplex.Param.MIP.Strategy.File, 3);
             cplex.setParam(IloCplex.Param.TimeLimit, 3600);
             //array of variables one for each route
             //min number of routes
@@ -38,7 +45,7 @@ public class CplexSolver {
                 List<IloNumVar> varListToDriver = new ArrayList<>();
                 for (int j = 0; j < toWorkRoutes.size(); j++) {
                     RouteSet routeSet = toWorkRoutes.get(j);
-                    if (routeSet.getMembers().contains(agent)) {
+                    if (routeSet.getAgents().contains(agent)) {
                         if (toWorkRoutes.get(j).getDriver() == agent) {
                             varListToDriver.add(binVars[j]);
                         }
@@ -48,7 +55,7 @@ public class CplexSolver {
                 List<IloNumVar> varListFrom = new ArrayList<>();
                 List<IloNumVar> varListFromDriver = new ArrayList<>();
                 for (int j = 0; j < fromWorkRoutes.size(); j++) {
-                    if (fromWorkRoutes.get(j).getMembers().contains(agent)) {
+                    if (fromWorkRoutes.get(j).getAgents().contains(agent)) {
                         if (fromWorkRoutes.get(j).getDriver() == agent) {
                             varListFromDriver.add(binVars[j + toWorkRoutes.size()]);
                         }
@@ -58,7 +65,7 @@ public class CplexSolver {
                 //constraint #agent is picked as driver to work = # agent is picked as driver from work
                 List<IloNumVar> varListBothDriver = new ArrayList<>(varListToDriver);
                 varListBothDriver.addAll(varListFromDriver);
-                IloNumVar[] varArrayBothDriver = varListBothDriver.toArray(new IloNumVar[0]);
+                IloNumVar[] varArrayBothDriver = convert2Array(varListBothDriver);
                 double[] coeffBoth = new double[varArrayBothDriver.length];
                 Arrays.fill(coeffBoth, 0, varListToDriver.size(), 1);
                 Arrays.fill(coeffBoth, varListToDriver.size(), coeffBoth.length, -1);
@@ -68,7 +75,7 @@ public class CplexSolver {
                 cplex.addEq(constraint1, 0);
 
                 //constraint each agent picked exactly once to Work
-                IloNumVar[] varArrayTo = varListTo.toArray(new IloNumVar[0]);
+                IloNumVar[] varArrayTo = convert2Array(varListTo);
                 double[] coeffTo = new double[varArrayTo.length];
                 Arrays.fill(coeffTo, 1);
                 IloLinearNumExpr constraint2 = cplex.linearNumExpr();
@@ -77,7 +84,7 @@ public class CplexSolver {
                 cplex.addEq(constraint2, 1);
 
                 //constraint each agent picked exactly once from work
-                IloNumVar[] varArrayFrom = varListFrom.toArray(new IloNumVar[0]);
+                IloNumVar[] varArrayFrom = convert2Array(varListFrom);
                 double[] coeffFrom = new double[varArrayFrom.length];
                 Arrays.fill(coeffFrom, 1);
                 IloLinearNumExpr constraint3 = cplex.linearNumExpr();
@@ -85,27 +92,31 @@ public class CplexSolver {
                 constraint3.setConstant(0);
                 cplex.addEq(constraint3, 1);
             }
-            if (!cplex.solve()) {
-                System.out.println("No solution found");
-                return null;
-            }
-            double[] solution = cplex.getValues(binVars);
-            List<RouteSet> solutionTo = new ArrayList<>();
-            for (int i = 0; i < toWorkRoutes.size(); i++) {
-                if (solution[i] == 1) {
-                    solutionTo.add(toWorkRoutes.get(i));
+            List<RouteSet> result = new ArrayList<>();
+            while (result.isEmpty() && checkIfValid(result, agents)) {
+                System.out.println("trying to solve (again)");
+                if (!cplex.solve()) {
+                    System.out.println("No solution found");
+                    return null;
                 }
-            }
-            List<RouteSet> solutionFrom = new ArrayList<>();
-            for (int i = toWorkRoutes.size(); i < solution.length; i++) {
-                if (solution[i] == 1) {
-                    solutionFrom.add(fromWorkRoutes.get(i - toWorkRoutes.size()));
+                double[] solution = cplex.getValues(binVars);
+                List<RouteSet> solutionTo = new ArrayList<>();
+                for (int i = 0; i < toWorkRoutes.size(); i++) {
+                    if (solution[i] == 1) {
+                        solutionTo.add(toWorkRoutes.get(i));
+                    }
                 }
+                List<RouteSet> solutionFrom = new ArrayList<>();
+                for (int i = toWorkRoutes.size(); i < solution.length; i++) {
+                    if (solution[i] == 1) {
+                        solutionFrom.add(fromWorkRoutes.get(i - toWorkRoutes.size()));
+                    }
+                }
+                result.addAll(solutionTo);
+                result.addAll(solutionFrom);
+                System.out.println("The number of node was: " + cplex.getNnodes());
+                System.out.println("CPU time spent: " + cplex.getCplexTime() + " seconds");
             }
-            List<RouteSet> result = new ArrayList<>(solutionTo);
-            result.addAll(solutionFrom);
-            System.out.println("The number of node was: " + cplex.getNnodes());
-            System.out.println("CPU time spent: " + cplex.getCplexTime() + " seconds");
             cplex.close();
 
             return result;
@@ -114,5 +125,53 @@ public class CplexSolver {
             System.err.println("Concert exception caught: " + e);
             return null;
         }
+    }
+
+    private static boolean checkIfValid(List<RouteSet> routeSetList, List<Agent> agents) {
+        int[] checkingTo = new int[agents.size()];
+        int[] checkingFrom = new int[agents.size()];
+        int[] checkingToDriver = new int[agents.size()];
+        int[] checkingFromDriver = new int[agents.size()];
+
+        for (RouteSet route : routeSetList) {
+            List<LocalDateTime> interval = CommonFunctionHelper.calculateInterval(
+                    route.getAgents(), route.getTypeOfGrouping());
+            if (interval == null) {
+                System.out.println("The time interval is no longer fullfilled");
+                return false;
+            }
+            if (route.getDriver().getCar().getSeatCount() < route.getAgents().size()) {
+                return false;
+            }
+            if (route.getTypeOfGrouping() == Requesttype.DRIVETOUNI) {
+                for (Agent a : route.getAgents()) {
+                    checkingTo[agents.indexOf(a)] += 1;
+                }
+                Agent driver = route.getDriver();
+                checkingToDriver[agents.indexOf(driver)] += 1;
+            } else {
+                for (Agent a : route.getAgents()) {
+                    checkingFrom[agents.indexOf(a)] += 1;
+                }
+                Agent driver = route.getDriver();
+                checkingFromDriver[agents.indexOf(driver)] += 1;
+            }
+        }
+        for (int i = 0; i < agents.size(); i++) {
+            if (checkingTo[i] != 1 || checkingFrom[i] != 1 ||
+                    (checkingToDriver[i] != checkingFromDriver[i])) {
+                System.out.println("the rides to agents constraint is not fullfilled");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static IloNumVar[] convert2Array(List<IloNumVar> varListBothDriver) {
+        IloNumVar[] result = new IloNumVar[varListBothDriver.size()];
+        for (int i = 0; i < varListBothDriver.size(); i++) {
+            result[i] = varListBothDriver.get(i);
+        }
+        return result;
     }
 }

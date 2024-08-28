@@ -33,6 +33,7 @@ import org.apache.commons.lang3.StringUtils;
 import java.awt.geom.Point2D;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static camos.mode_execution.ModeExecutionManager.graphHopper;
 
@@ -93,7 +94,7 @@ public class CommonFunctionHelper {
         if (members.size() == 1) {
             return getTimeInterval(members.get(0), isToWork);
         }
-        List<LocalDateTime> tuple1 = calculateInterval(members.subList(0, members.size() / 2), isToWork);
+        List<LocalDateTime> tuple1 = calculateInterval(members.subList(0, (members.size() / 2) + 1), isToWork);
         List<LocalDateTime> tuple2 = calculateInterval(members.subList((members.size() / 2) + 1, members.size()), isToWork);
         return calcDoub(tuple1, tuple2);
     }
@@ -103,12 +104,12 @@ public class CommonFunctionHelper {
         if (tupleFirst == null || tupleSecond == null) {
             return null;
         }
-        if (tupleFirst.get(0).isBefore(tupleFirst.get(0))) {
+        if (tupleFirst.get(0).isBefore(tupleSecond.get(0))) {
             result.add(tupleSecond.get(0));
         } else {
             result.add(tupleFirst.get(0));
         }
-        if (tupleFirst.get(1).isBefore(tupleFirst.get(1))) {
+        if (tupleFirst.get(1).isBefore(tupleSecond.get(1))) {
             result.add(tupleFirst.get(1));
         } else {
             result.add(tupleSecond.get(1));
@@ -151,16 +152,35 @@ public class CommonFunctionHelper {
         return graphHopper.route(ghRequest).getBest();
     }
 
-    public static Point2D.Double convertToMercator(Coordinate coord) {
-        double x = Math.toRadians(coord.getLongitude());
-        double y = Math.log(Math.tan(Math.PI / 4 + Math.toRadians(coord.getLatitude()) / 2));
+    public static double calcBearing(Coordinate position, Coordinate center) {
+        double diffLong = Math.toRadians(position.getLongitude()) - Math.toRadians(center.getLongitude());
+        double lat1 = Math.toRadians(center.getLatitude());
+        double lat2 = Math.toRadians(position.getLatitude());
 
-        return new Point2D.Double(6371000 * x, 6371000 * y);
+        double X = Math.cos(lat2) * Math.sin(diffLong);
+        double Y = (Math.cos(lat1) * Math.sin(lat2)) -
+                (Math.sin(lat1) * Math.cos(lat2) * Math.cos(diffLong));
+
+        double bearing = Math.toDegrees(Math.atan2(X, Y));
+        if (bearing > 360) {
+            return bearing - 360;
+        } else if(bearing < 0) {
+            return bearing + 360;
+        } else {
+            return bearing;
+        }
+    }
+/*
+    public static Point2D.Double convertToMercator(Coordinate coord, Coordinate center) {
+        double diffRadianLat = coord.getLatitude() - center.getLatitude();
+        double diffRadianLong = coord.getLongitude() - center.getLongitude();
+
+        return new Point2D.Double((6371000 * diffRadianLong) * Math.cos(center.getLatitude()), 6371000 * diffRadianLat);
     }
 
-    public static double angleWithVertical(Point2D target, Point2D point) {
+    public static double angleWithVertical(Point2D point) {
         // Calculate the slope of the segment
-        double slope = (point.getY() - target.getY()) / (point.getX() - target.getX());
+        double slope = (point.getY() / point.getX());
 
         // Calculate the angle with respect to the horizontal in radians
         double theta = Math.atan(slope);
@@ -170,6 +190,7 @@ public class CommonFunctionHelper {
 
         return 90 - thetaDegrees;
     }
+    */
 
     public static Double checkFeasTime(List<Agent> members) {
         List<Coordinate> coords = new ArrayList<>(members.stream().map(Agent::getHomePosition).toList());
@@ -193,6 +214,8 @@ public class CommonFunctionHelper {
         }
         return totalTraveltime[0];
     }
+
+
 
     /**
      * Calculate and return the ride end time.

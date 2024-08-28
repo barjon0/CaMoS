@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static java.util.Comparator.comparingDouble;
@@ -36,24 +37,23 @@ import static java.util.Comparator.comparingInt;
 public class ExactSolution extends SDCTSP{
 
     List<RouteSet> foundRouteSets;
-    List<RouteSet> lookUpTo;
-    List<RouteSet> lookUpFrom;
+    Set<RouteSet> lookUpTo;
+    Set<RouteSet> lookUpFrom;
 
-    ConcurrentHashMap<Set<Agent>, Boolean> toWorkSets;
-    ConcurrentHashMap<Set<Agent>, Boolean> fromWorkSets;
+    AtomicInteger lock;
+
     public ExactSolution() {
         super();
-        lookUpTo = new ArrayList<>();
-        lookUpFrom = new ArrayList<>();
+        lookUpTo = new HashSet<>();
+        lookUpFrom = new HashSet<>();
         foundRouteSets = new ArrayList<>();
-        toWorkSets = new ConcurrentHashMap<>();
-        fromWorkSets = new ConcurrentHashMap<>();
+        lock = new AtomicInteger(0);
     }
 
 
 
     @Override
-    public void prepareMode(List<Agent> agents) {
+    public void prepareMode(List<Agent> agents) throws InterruptedException {
 
         this.agents = agents;
         System.out.println("before enumerating " + (System.nanoTime()/ 1_000_000) + "ms");
@@ -63,52 +63,58 @@ public class ExactSolution extends SDCTSP{
 
         int numberOfCores = Runtime.getRuntime().availableProcessors() - 1;
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfCores);
+        System.out.println("The system is using " + numberOfCores + " cores.");
 
         for(List<Agent> oneTarget : agentsByTarget.values()) {
+            List<List<Agent>> preClusterAgents = makePreclusteringRadial(oneTarget, 400);
+            for (List<Agent> agentCluster : preClusterAgents) {
+                System.out.println("starting one Agent Cluster " + (System.nanoTime() / 1_000_000) + "ms");
+                System.out.println("Number of agents is: " + agentCluster.size());
 
-            System.out.println("starting one Target " + (System.nanoTime() / 1_000_000) + "ms");
-            System.out.println(oneTarget.size());
+                List<Future<List<RouteSet>>> futureListTo = new ArrayList<>();
+                List<Future<List<RouteSet>>> futureListBack = new ArrayList<>();
 
-            List<Future<List<RouteSet>>> futureListTo = new ArrayList<>();
-            List<Future<List<RouteSet>>> futureListBack = new ArrayList<>();
+                List<List<Agent>> preClusters = makePreclusteringRadial(agentCluster, GeneralManager.preClusterSize);
 
-            List<List<Agent>> preClusters = makePreclusteringRadial(oneTarget, GeneralManager.preClusterSize);
+                for (List<Agent> preCluster : preClusters) {
+                    Callable<List<RouteSet>> listCallable = () -> routeEnumerate(preCluster, Requesttype.DRIVETOUNI);
+                    Future<List<RouteSet>> result = executorService.submit(listCallable);
+                    futureListTo.add(result);
 
-            for(List<Agent> preCluster : preClusters) {
-                Callable<List<RouteSet>> listCallable = () -> routeEnumerate(preCluster, Requesttype.DRIVETOUNI);
-                Future<List<RouteSet>> result = executorService.submit(listCallable);
-                futureListTo.add(result);
-
-                Callable<List<RouteSet>> listCallableBack = () -> routeEnumerate(preCluster, Requesttype.DRIVEHOME);
-                Future<List<RouteSet>> resultBack = executorService.submit(listCallableBack);
-                futureListBack.add(resultBack);
-            }
-            futureListTo.forEach(ls -> {
-                try {
-                    lookUpTo.addAll(ls.get());
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
+                    Callable<List<RouteSet>> listCallableBack = () -> routeEnumerate(preCluster, Requesttype.DRIVEHOME);
+                    Future<List<RouteSet>> resultBack = executorService.submit(listCallableBack);
+                    futureListBack.add(resultBack);
                 }
-            });
+                futureListTo.forEach(ls -> {
+                    try {
+                        lookUpTo.addAll(ls.get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
 
-            futureListBack.forEach(ls -> {
-                try {
-                    lookUpFrom.addAll(ls.get());
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
+                futureListBack.forEach(ls -> {
+                    try {
+                        lookUpFrom.addAll(ls.get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                System.out.println("enumarating done for one Agent Cluster " + (System.nanoTime() / 1_000_000) + "ms");
+
+                System.gc();
+                Thread.sleep(1000);
+
+                List<RouteSet> sets = CplexSolver.solveProblem(lookUpTo.stream().toList(), lookUpFrom.stream().toList(), agentCluster);
+                if (sets != null) {
+                    foundRouteSets.addAll(sets);
+                    lookUpTo = new HashSet<>();
+                    lookUpFrom = new HashSet<>();
+                    System.out.println("solved for one agent Cluster");
+                } else {
+                    throw new IllegalStateException("NO solution found");
                 }
-            });
-
-            System.out.println("enumarating done for target " + (System.nanoTime() / 1_000_000) + "ms");
-
-            List<RouteSet> sets = CplexSolver.solveProblem(lookUpTo, lookUpFrom, oneTarget);
-            if(sets != null) {
-                foundRouteSets.addAll(sets);
-                lookUpTo = new ArrayList<>();
-                lookUpFrom = new ArrayList<>();
-                System.out.println("solved for one target");
-            } else {
-                throw new IllegalStateException("NO solution found");
             }
 
         }
@@ -116,6 +122,7 @@ public class ExactSolution extends SDCTSP{
         System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
 
     }
+
 
 
 /*
@@ -130,8 +137,12 @@ public class ExactSolution extends SDCTSP{
 
         int numberOfCores = Runtime.getRuntime().availableProcessors() - 1;
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfCores);
+        System.out.println("Using " + numberOfCores + " many cores for computation.");
 
         for(List<Agent> oneTarget : agentsByTarget.values()) {
+
+            Map<Set<Agent>, Boolean> foundSetsTo = new HashMap<>();
+            Map<Set<Agent>, Boolean> foundSetsFrom = new HashMap<>();
 
             System.out.println("starting one Target " + (System.nanoTime() / 1_000_000) + "ms");
             System.out.println(oneTarget.size());
@@ -149,8 +160,8 @@ public class ExactSolution extends SDCTSP{
             List<List<Agent>> allNecessaryTo = findNeededBubbles(resultTo, oneTarget);
             List<List<Agent>> allNecessaryFrom = findNeededBubbles(resultFrom, oneTarget);
 
-            allCliques.add(allNecessaryTo);
-            allCliques.add(allNecessaryFrom);
+            allCliques.add(allNecessaryTo.stream().sorted(Comparator.comparingInt(List::size)).toList());
+            allCliques.add(allNecessaryFrom.stream().sorted(Comparator.comparingInt(List::size)).toList());
 
             System.out.println("All time cliques were found, there are " + allCliques.get(0).size() + " to work \nAnd " + allCliques.get(1).size() + " from work.");
 
@@ -160,7 +171,7 @@ public class ExactSolution extends SDCTSP{
             for (List<Agent> timeClique : allCliques.get(0)) {
                 List<List<Agent>> preClusters = makePreclusteringRadial(timeClique, GeneralManager.preClusterSize);
                 for (List<Agent> preCluster : preClusters) {
-                    Callable<List<RouteSet>> runn = () -> routeEnumerateTime(preCluster, Requesttype.DRIVETOUNI);
+                    Callable<List<RouteSet>> runn = () -> routeEnumerateTime(preCluster, Requesttype.DRIVETOUNI, foundSetsTo);
                     checkListTo.add(executorService.submit(runn));
                 }
             }
@@ -168,7 +179,7 @@ public class ExactSolution extends SDCTSP{
             for (List<Agent> timeClique : allCliques.get(1)) {
                 List<List<Agent>> preClusters = makePreclusteringRadial(timeClique, GeneralManager.preClusterSize);
                 for (List<Agent> preCluster : preClusters) {
-                    Callable<List<RouteSet>> runn = () -> routeEnumerateTime(preCluster, Requesttype.DRIVEHOME);
+                    Callable<List<RouteSet>> runn = () -> routeEnumerateTime(preCluster, Requesttype.DRIVEHOME, foundSetsFrom);
                     checkListFrom.add(executorService.submit(runn));
                 }
             }
@@ -183,13 +194,11 @@ public class ExactSolution extends SDCTSP{
 
             System.out.println("enumarating done for target " + (System.nanoTime() / 1_000_000) + "ms");
 
-            List<RouteSet> sets = CplexSolver.solveProblem(lookUpTo, lookUpFrom, oneTarget);
+            List<RouteSet> sets = CplexSolver.solveProblem(lookUpTo.stream().toList(), lookUpFrom.stream().toList(), oneTarget);
             if(sets != null) {
                 foundRouteSets.addAll(sets);
-                lookUpFrom = new ArrayList<>();
-                lookUpTo = new ArrayList<>();
-                toWorkSets = new ConcurrentHashMap<>();
-                fromWorkSets = new ConcurrentHashMap<>();
+                lookUpFrom = new HashSet<>();
+                lookUpTo = new HashSet<>();
                 System.out.println("solved for one target");
             } else {
                 throw new IllegalStateException("NO solution found");
@@ -202,6 +211,8 @@ public class ExactSolution extends SDCTSP{
     }
 
  */
+
+
 
     //does greedy Set Cover
     private List<List<Agent>> findNeededBubbles(List<List<Agent>> allBubbles, List<Agent> agentList) {
@@ -233,18 +244,27 @@ public class ExactSolution extends SDCTSP{
     }
 
 
-    private List<RouteSet> routeEnumerateTime(List<Agent> agents, Requesttype isToWork) {
-        ConcurrentHashMap<Set<Agent>, Boolean> foundSets;
-        if(isToWork == Requesttype.DRIVETOUNI) {
-            foundSets = toWorkSets;
-        } else {
-            foundSets = fromWorkSets;
-        }
+    private List<RouteSet> routeEnumerateTime(List<Agent> agents, Requesttype isToWork, Map<Set<Agent>, Boolean> foundSetsOriginal) throws InterruptedException {
 
+        //long timeStart = System.currentTimeMillis();
+        System.out.println("Thread No. " + Thread.currentThread().getId() + ": Starting to enumerate Cluster of size: " + agents.size());
         List<RouteSet> routeSetList = new ArrayList<>();
         DefaultUndirectedGraph<Agent, DefaultEdge> shareGraph =
                 buildShareGraph(agents, isToWork);
+        Map<Set<Agent>, Boolean> foundSets;
 
+        while (true) {
+            if(lock.get() != 0) {
+                Thread.sleep(100);
+            } else {
+                lock.set(1);
+                foundSets = new HashMap<>(foundSetsOriginal);
+                lock.set(0);
+                break;
+            }
+        }
+
+        Map<Set<Agent>, Boolean> nextFoundSets = new HashMap<>();
         List<Set<Agent>> finalLastCliques = new ArrayList<>();
         shareGraph.vertexSet().forEach(v -> {
             Set<Agent> members = new HashSet<>();
@@ -254,7 +274,7 @@ public class ExactSolution extends SDCTSP{
                     .getSimpleBestGraphhopperPath(v.getHomePosition(), v.getRequest().getDropOffPosition())
                     .getTime() / 60000.0);
             if(!foundSets.containsKey(members)) {
-                foundSets.put(members, true);
+                nextFoundSets.put(members, true);
                 routeSetList.add(new RouteSet(members.stream().toList(), v, time, isToWork));
             }
         });
@@ -265,7 +285,7 @@ public class ExactSolution extends SDCTSP{
             List<Set<Agent>> nextCliques = new ArrayList<>();
             for(Set<Agent> clique : lastCliques) {
                 int finalK = k;
-                if(clique.stream().anyMatch(a -> a.getCar().getSeatCount() >= finalK)) {
+                if(clique.stream().anyMatch(a -> a.getCar().getSeatCount() > finalK)) {
                     Iterator<Agent> iterator = clique.iterator();
                     Set<Agent> candidates = Graphs.neighborSetOf(shareGraph, iterator.next());
                     while(iterator.hasNext() && !candidates.isEmpty()) {
@@ -313,23 +333,36 @@ public class ExactSolution extends SDCTSP{
                                 if (foundValidRoute) {
                                     nextCliques.add(memberSet);
                                 }
-                                foundSets.put(memberSet, foundValidRoute);
+                                nextFoundSets.put(memberSet, foundValidRoute);
                             } else {
                                 if (foundSets.get(memberSet)) {
                                     nextCliques.add(memberSet);
                                 }
                             }
                         }
-
                     }
                 }
             }
             lastCliques = nextCliques;
             k += 1;
-            System.out.println("CliqueSize is " + k + "\nNumber of Cliques: " + lastCliques.size());
+            System.out.println("Thread No. " + Thread.currentThread().getId() + ": CliqueSize is " + k + "\nNumber of Cliques: " + lastCliques.size());
         }
+        //multithreading update overall Routeset list -> there will be some routesets found simultaneously but filtered out later
+        while (true) {
+            if (lock.get() != 0) {
+                Thread.sleep(100);
+            } else {
+                lock.set(1);
+                foundSetsOriginal.putAll(nextFoundSets);
+                lock.set(0);
+                break;
+            }
+        }
+        //System.out.println("Done enumerate  of Cluster with size: " + agents.size() + "\n It took " + ((System.nanoTime() - timeStart) / 60000.0));
         return routeSetList;
     }
+
+
 
     private List<RouteSet> routeEnumerate(List<Agent> candidates, Requesttype isToWork) {
 
@@ -341,7 +374,7 @@ public class ExactSolution extends SDCTSP{
     private List<RouteSet> buildingCliques(DefaultUndirectedGraph<Agent, DefaultEdge> shareGraph, Requesttype isToWork) {
         List<RouteSet> routeSetList = new ArrayList<>();
 
-        List<Set<Agent>> finalLastCliques = new ArrayList<>();
+        Set<Set<Agent>> finalLastCliques = new HashSet<>();
         shareGraph.vertexSet().forEach(v -> {
             Set<Agent> members = new HashSet<>();
             members.add(v);
@@ -351,14 +384,14 @@ public class ExactSolution extends SDCTSP{
                     .getTime() / 60000.0);
             routeSetList.add(new RouteSet(members.stream().toList(), v, time, isToWork));
         });
-        List<Set<Agent>> lastCliques = finalLastCliques;
-
+        Set<Set<Agent>> lastCliques = finalLastCliques;
+        System.out.println("Thread No. " + Thread.currentThread().getId() + ": Starting to enumerate Cluster of size: " + shareGraph.vertexSet().size());
         int k = 1;
         while (!lastCliques.isEmpty()) {
-            List<Set<Agent>> nextCliques = new ArrayList<>();
+            Set<Set<Agent>> nextCliques = new HashSet<>();
             for(Set<Agent> clique : lastCliques) {
                 int finalK = k;
-                if(clique.stream().anyMatch(a -> a.getCar().getSeatCount() >= finalK)) {
+                if(clique.stream().anyMatch(a -> a.getCar().getSeatCount() > finalK)) {
                     Iterator<Agent> iterator = clique.iterator();
                     Set<Agent> candidates = Graphs.neighborSetOf(shareGraph, iterator.next());
                     while(iterator.hasNext() && !candidates.isEmpty()) {
@@ -372,30 +405,100 @@ public class ExactSolution extends SDCTSP{
                         if (clique.stream().allMatch(u -> u.getId() < candidate.getId())) {
                             Set<Agent> memberSet = new HashSet<>(clique);
                             memberSet.add(candidate);
-                            boolean found = false;
+                                boolean found = false;
+                                List<LocalDateTime> interval =
+                                        CommonFunctionHelper.calculateInterval(memberSet.stream().toList(), isToWork);
+                                if (interval != null) {
+                                    List<Agent> possDrivers = memberSet.stream()
+                                            .filter(a -> a.getCar().getSeatCount() > finalK).toList();
+                                    //build distances graph
+                                    SimpleWeightedGraph<Coordinate, DefaultWeightedEdge> timeGraph = buildTimesGraph(memberSet.stream().toList());
+                                    for (Agent driver : possDrivers) {
+                                        RouteSet rS = null;
+
+                                        List<Agent> withoutDriver = new ArrayList<>(memberSet);
+                                        withoutDriver.remove(driver);
+                                        List<List<Agent>> permutations = CommonFunctionHelper.getPermut(withoutDriver);
+                                        for (List<Agent> permut : permutations) {
+                                            permut.add(0, driver);
+                                            Double travelTime = checkTime(permut, timeGraph);
+                                            if (travelTime != null) {
+                                                if (rS == null) {
+                                                    rS = new RouteSet(permut, driver, travelTime, isToWork);
+                                                    found = true;
+                                                    routeSetList.add(rS);
+                                                } else {
+                                                    if (rS.getTimeInMinutes() > travelTime) {
+                                                        rS.setTimeInMinutes(travelTime);
+                                                        rS.setOrder(permut);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (found) {
+                                        nextCliques.add(memberSet);
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+            lastCliques = nextCliques;
+            k += 1;
+            System.out.println("Thread No. " + Thread.currentThread().getId() + ": CliqueSize is " + k + "\nNumber of Cliques: " + lastCliques.size());
+        }
+        return routeSetList;
+    }
+/*
+    private List<RouteSet> enumerateSmart(List<Agent> agentList, Requesttype isToWork) {
+        List<RouteSet> result = new ArrayList<>();
+        List<Set<Agent>> lastCliques = new ArrayList<>();
+        System.out.println("Thread No. " + Thread.currentThread().threadId() + ": Starting to enumerate Cluster of size: " + agentList.size());
+        for (Agent agent : agentList) {
+            Set<Agent> members = new HashSet<>();
+            members.add(agent);
+            lastCliques.add(members);
+            double time = (CommonFunctionHelper
+                    .getSimpleBestGraphhopperPath(agent.getHomePosition(), agent.getRequest().getDropOffPosition())
+                    .getTime() / 60000.0);
+            result.add(new RouteSet(members.stream().toList(), agent, time, isToWork));
+        }
+        Set<Set<Agent>> nextCliques;
+        int k = 1;
+        while (!lastCliques.isEmpty()) {
+            nextCliques = new HashSet<>();
+            for (int i = 0; i < lastCliques.size(); i++) {
+                for (int j = i + 1; j < lastCliques.size(); j++) {
+                    Set<Agent> members = new HashSet<>(lastCliques.get(i));
+                    members.addAll(lastCliques.get(j));
+                    int finalK = k;
+                    if (members.size() == (k + 1) && !nextCliques.contains(members) && members.stream().anyMatch(agent -> agent.getCar().getSeatCount() > finalK)) {
+                        List<Set<Agent>> allSubCliques = findAllSubCliques(members);
+                        if(new HashSet<>(lastCliques).containsAll(allSubCliques)) {
                             List<LocalDateTime> interval =
-                                    CommonFunctionHelper.calculateInterval(memberSet.stream().toList(), isToWork);
-                            if (interval != null) {
-                                List<Agent> possDrivers = memberSet.stream()
+                                    CommonFunctionHelper.calculateInterval(members.stream().toList(), isToWork);
+                            if(interval != null) {
+                                boolean found = false;
+                                List<Agent> possDrivers = members.stream()
                                         .filter(a -> a.getCar().getSeatCount() > finalK).toList();
                                 //build distances graph
-                                SimpleWeightedGraph<Coordinate, DefaultWeightedEdge> timeGraph = buildTimesGraph(memberSet.stream().toList());
+                                SimpleWeightedGraph<Coordinate, DefaultWeightedEdge> timeGraph = buildTimesGraph(members.stream().toList());
+
                                 for (Agent driver : possDrivers) {
                                     RouteSet rS = null;
-
-                                    List<Agent> withoutDriver = new ArrayList<>(memberSet);
+                                    List<Agent> withoutDriver = new ArrayList<>(members);
                                     withoutDriver.remove(driver);
                                     List<List<Agent>> permutations = CommonFunctionHelper.getPermut(withoutDriver);
+
                                     for (List<Agent> permut : permutations) {
                                         permut.add(0, driver);
-                                        //Long travelTime = CommonFunctionHelper.checkFeasTime(permut);
-                                        //use function that gets graph and Agent-permutation -> checks if possible, returns total time
                                         Double travelTime = checkTime(permut, timeGraph);
                                         if (travelTime != null) {
                                             if (rS == null) {
                                                 rS = new RouteSet(permut, driver, travelTime, isToWork);
                                                 found = true;
-                                                routeSetList.add(rS);
+                                                result.add(rS);
                                             } else {
                                                 if (rS.getTimeInMinutes() > travelTime) {
                                                     rS.setTimeInMinutes(travelTime);
@@ -404,21 +507,34 @@ public class ExactSolution extends SDCTSP{
                                             }
                                         }
                                     }
-
+                                }
+                                if (found) {
+                                    nextCliques.add(members);
                                 }
                             }
-                            if (found) {
-                                nextCliques.add(memberSet);
-                            }
                         }
+
                     }
                 }
             }
-            lastCliques = nextCliques;
             k += 1;
-            System.out.println("CliqueSize is " + k + "\nNumber of Cliques: " + lastCliques.size());
+            lastCliques = nextCliques.stream().toList();
+            System.out.println("Thread No. " + Thread.currentThread().threadId() + ": CliqueSize is " + k + "\nNumber of Cliques: " + lastCliques.size());
         }
-        return routeSetList;
+
+        return result;
+    }
+
+ */
+
+    private List<Set<Agent>> findAllSubCliques(Set<Agent> memberSet) {
+        List<Set<Agent>> result = new ArrayList<>();
+        for (Agent agent : memberSet) {
+            Set<Agent> aClique = new HashSet<>(memberSet);
+            aClique.remove(agent);
+            result.add(aClique);
+        }
+        return result;
     }
 
     private Double checkTime(List<Agent> permut, SimpleWeightedGraph<Coordinate, DefaultWeightedEdge> timeGraph) {
@@ -494,15 +610,13 @@ public class ExactSolution extends SDCTSP{
 
     private List<List<Agent>> makePreclusteringRadial(List<Agent> oneTarget, int clusterSize) {
         //create method to get slope between agent and target
-        Point2D target = CommonFunctionHelper.convertToMercator(
-                oneTarget.get(0).getRequest().getDropOffPosition());
         List<List<Agent>> result = new ArrayList<>();
+        Coordinate target = oneTarget.get(0).getRequest().getDropOffPosition();
         List<List<Object>> radials = new ArrayList<>();
         for(Agent ag : oneTarget) {
             List<Object> tuple = new ArrayList<>();
             tuple.add(ag);
-            tuple.add(CommonFunctionHelper.angleWithVertical(target,
-                    CommonFunctionHelper.convertToMercator(ag.getHomePosition())));
+            tuple.add(CommonFunctionHelper.calcBearing(ag.getHomePosition(), target));
             radials.add(tuple);
         }
         radials = radials.stream().sorted(comparingDouble(obj -> (double) obj.get(1))).toList();

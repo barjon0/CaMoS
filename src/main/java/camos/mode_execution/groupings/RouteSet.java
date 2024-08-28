@@ -2,23 +2,29 @@ package camos.mode_execution.groupings;
 
 import camos.mode_execution.Agent;
 import camos.mode_execution.Requesttype;
+import org.openjdk.nashorn.internal.ir.annotations.Immutable;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class RouteSet extends Grouping{
     double timeInMinutes;
     List<Agent> order;
-
+    Set<Agent> immutableAgents;
 
     public RouteSet(List<Agent> members, Agent driver, double timeInMinutes, Requesttype isToWork) {
         this.agents = members;
+        this.immutableAgents = Set.copyOf(agents);
         this.driver = driver;
         this.typeOfGrouping = isToWork;
         this.order = members;
         this.timeInMinutes = timeInMinutes;
     }
 
-    public List<Agent> getMembers() {
+    public List<Agent> getAgents() {
+        if(!this.immutableAgents.equals(new HashSet<>(agents))) {
+            throw new IllegalStateException("The agents are not correct anymore");
+        }
         return agents;
     }
 
@@ -35,7 +41,7 @@ public class RouteSet extends Grouping{
     }
 
     public void setOrder(List<Agent> order) {
-        if (new HashSet<>(agents).containsAll(order)) {
+        if (immutableAgents.containsAll(order)) {
             this.order = order;
         } else {
             throw new IllegalArgumentException("Tried to change order to members not in Set");
@@ -44,7 +50,7 @@ public class RouteSet extends Grouping{
 
     @Override
     public int hashCode() {
-        Set<Agent> uniqueSet = new HashSet<>(agents);
+        Set<Agent> uniqueSet = new HashSet<>(immutableAgents);
         uniqueSet.remove(driver);
         return Objects.hash(driver, typeOfGrouping, uniqueSet);
     }
@@ -53,9 +59,9 @@ public class RouteSet extends Grouping{
     public boolean equals(Object obj) {
         if(this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
-        Set<Agent> uniqueSet = new HashSet<>(this.agents);
+        Set<Agent> uniqueSet = new HashSet<>(this.immutableAgents);
         uniqueSet.remove(this.driver);
-        Set<Agent> otherUniqueSet = new HashSet<>(((RouteSet) obj).agents);
+        Set<Agent> otherUniqueSet = new HashSet<>(((RouteSet) obj).immutableAgents);
         otherUniqueSet.remove(((RouteSet) obj).driver);
         return (this.typeOfGrouping.equals(((RouteSet) obj).typeOfGrouping) && this.driver.equals(((RouteSet) obj).driver) && uniqueSet.equals(otherUniqueSet));
     }

@@ -88,6 +88,7 @@ public abstract class SDCTSP extends MobilityMode {
                 List<LocalDateTime> interval = CommonFunctionHelper.calculateInterval(
                         ride.getAgents(), ride.getTypeOfGrouping());
                 if (interval == null) {
+			        System.out.println("The time interval is no longer fullfilled");
                     return true;
                 }
                 if (ride.getDriver().getCar().getSeatCount() < ride.getAgents().size()) {
@@ -110,6 +111,7 @@ public abstract class SDCTSP extends MobilityMode {
             for (int i = 0; i < agentList.size(); i++) {
                 if (checkingTo[i] != 1 || checkingFrom[i] != 1 ||
                         (checkingToDriver[i] != checkingFromDriver[i])) {
+			        System.out.println("the rides to agents constraint is not fullfilled");
                     return true;
                 }
             }
@@ -235,11 +237,12 @@ public abstract class SDCTSP extends MobilityMode {
                     lastStop.getPersonsInQuestion().add(ride.getAgents().get(i));
                 } else {
                     ResponsePath pw = CommonFunctionHelper
-                            .getSimpleBestGraphhopperPath(ride.getAgents().get(i).getHomePosition(), lastPosition);
+                            .getSimpleBestGraphhopperPath(lastPosition, ride.getAgents().get(i).getHomePosition());
                     for (int j = distPerAgent.length - 1; j > i - 1; j--) {
                         distPerAgent[j] += (pw.getDistance() / 1000.0);
                         timePerAgent[j] += (pw.getTime() / 60000.0) + GeneralManager.stopTime;
                     }
+                    timePerAgent[i] -= GeneralManager.stopTime;
                     LocalDateTime arrivTime = lastStopTime.plusSeconds(Math.round(pw.getTime() / 1000.0));
                     lastStopTime = arrivTime.plusMinutes(GeneralManager.stopTime);
                     lastPosition = ride.getAgents().get(i).getHomePosition();
@@ -249,20 +252,16 @@ public abstract class SDCTSP extends MobilityMode {
                     stopList.add(lastStop);
                 }
             }
-            Coordinate secondLast;
-            if (ride.getAgents().size() == 1) {
-                secondLast = ride.getStartPosition();
-            } else {
-                secondLast = ride.getAgents().get(ride.getAgents().size() - 2).getHomePosition();
-            }
+
             ResponsePath lastPart = CommonFunctionHelper
-                    .getSimpleBestGraphhopperPath(ride.getEndPosition(), secondLast);
+                    .getSimpleBestGraphhopperPath(lastPosition, ride.getEndPosition());
 
             distPerAgent[distPerAgent.length - 1] += (lastPart.getDistance() / 1000.0);
             timePerAgent[timePerAgent.length - 1] += (lastPart.getTime() / 60000.0);
 
             ride.setDistanceCovered(distPerAgent[distPerAgent.length - 1]);
         }
+        ride.setStops(stopList);
 
         for (int i = 0; i < ride.getAgents().size(); i++) {
             Agent agent = ride.getAgents().get(i);
@@ -297,9 +296,7 @@ public abstract class SDCTSP extends MobilityMode {
                 costsBoth.put(agent, cosList);
                 agentToRides.put(agent, rideList);
             }
-
         }
-        ride.setStops(stopList);
     }
 
     //calculate normalized time per shared agent (- x  /log(x)) (do this dependant on function) -> histogram by establishing some bins
@@ -315,11 +312,17 @@ public abstract class SDCTSP extends MobilityMode {
                         / (a.getMaxTravelTimeInMinutes() - a.getMinTravelTime());
                 if(normTime > 1) {
                     //throw new IllegalStateException("Time is longer than max travel time by: " + (firstTime - a.getMaxTravelTimeInMinutes()));
-                    System.out.println("Time is longer than max travel time by: " + (firstTime - a.getMaxTravelTimeInMinutes()));
+                    double diff = firstTime - a.getMaxTravelTimeInMinutes();
+                    if(diff > 1) {
+                        System.out.println("Time is longer than max travel time by: " + diff);
+                    }
                     normTime = 1;
                 } else if (normTime < 0) {
                     //throw new IllegalStateException("Time is shorter then shortest travel time by " + (a.getMinTravelTime() - firstTime));
-                    System.out.println("Time is shorter then shortest travel time by " + (a.getMinTravelTime() - firstTime));
+                    double diff = a.getMinTravelTime() - firstTime;
+                    if(diff > 1) {
+                        System.out.println("Time is shorter then shortest travel time by" + diff);
+                    }
                     normTime = 0;
                     zeroCounter++;
                 } else if (normTime == 0.0) {
@@ -380,7 +383,8 @@ public abstract class SDCTSP extends MobilityMode {
         int numbOfVals = 0;
         int currBin = 1;
         while (counter < values.size()) {
-            if(values.get(counter).get(0) <= ((currBin * binLength)+minDistance)) {
+            if(values.get(counter).get(0) <= ((currBin * binLength) + minDistance)
+                    || (currBin == bins && values.get(counter).get(0) <= maxDistance)) {
                 avgPerBin[currBin - 1] += values.get(counter).get(1);
                 numbOfVals++;
                 counter++;

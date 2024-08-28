@@ -31,6 +31,8 @@ import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.tsphelpers.ActivityOrderConstraint;
 import camos.mode_execution.mobilitymodels.tsphelpers.ActivityWaitConstraintOneAllowed;
 import camos.mode_execution.mobilitymodels.tsphelpers.TransportCosts;
+import org.hsqldb.lib.HsqlArrayHeap;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -238,6 +240,8 @@ public class RideSharing extends MobilityMode {
         double averageSeatCount = 0;
         double avgTimeTravelled = 0;
 
+        double kmWalked = 0;
+
         for (Agent a : agents) {
             if (agentToRides.get(a).get(0).getDriver() == a) {
                 totalKilometers += kmTravelled.get(a);
@@ -247,7 +251,11 @@ public class RideSharing extends MobilityMode {
 
         for (Ride ride : rides) {
             totalMinutes += Duration.between(ride.getStartTime(), ride.getEndTime()).toMinutes();
-            //totalKilometers += ride.getDistanceCovered();
+            for (Agent agent : ride.getAgents()) {
+                if(agent != ride.getDriver()) {
+                    kmWalked += getDistToDriver(agent, ride.getDriver());
+                }
+            }
             if(ride.getAgents().size() == 1) {
                 aloneRides += 1;
             }
@@ -258,7 +266,8 @@ public class RideSharing extends MobilityMode {
                 "Average Seat Count: " + (averageSeatCount/rides.size()) + "\n" +
                 "Number of Rides alone: " + aloneRides + "\n" +
                 "Average Time Travelled: " + (avgTimeTravelled / ((2*agents.size()) - lost.keySet().size())) + "\n" +
-                "Number of Lost Students: " + lost.keySet().size());
+                "Number of Lost Students: " + lost.keySet().size() + "\n" +
+                "Total km walked: " + kmWalked);
         /*
         double averageSeatCount = 0;
         double averageSeatCountToUni = 0;
@@ -404,6 +413,16 @@ public class RideSharing extends MobilityMode {
 
     }
 
+    private double getDistToDriver(Agent agent, Agent driver) {
+        GHPoint agentPoint = new GHPoint(agent.getHomePosition().getLatitude(), agent.getHomePosition().getLongitude());
+        GHPoint driverPoint = new GHPoint(driver.getHomePosition().getLatitude(), driver.getHomePosition().getLongitude());
+        GHRequest ghRequest = new GHRequest(agentPoint, driverPoint).setProfile("foot").setLocale(Locale.GERMANY);
+
+        GHResponse rsp = ModeExecutionManager.graphHopper.route(ghRequest);
+        ResponsePath path = rsp.getBest();
+        return path.getDistance() / 60000L;
+    }
+
     @Override
     public List<Ride> returnFinishedRides() {
         return rides;
@@ -504,8 +523,12 @@ public class RideSharing extends MobilityMode {
             agentToDistance.put(agent, 0.0);
             agentToTime.put(agent, 0.0);
         }
-        List<Agent> inCar = new ArrayList<>();
-        inCar.add(ride.getDriver());
+        Set<Agent> inCar = new HashSet<>(ride.getAgents());
+        for (Stop stop : ride.getStops()) {
+            if(stop.getReasonForStopping() == Stopreason.PICKUP) {
+                stop.getPersonsInQuestion().forEach(inCar::remove);
+            }
+        }
 
         for (Stop stop : ride.getStops()) {
             secondCoordinate = stop.getStopCoordinate();
@@ -513,39 +536,42 @@ public class RideSharing extends MobilityMode {
             list.add(Coordinate.coordinateToLocation(firstCoordinate));
             list.add(Coordinate.coordinateToLocation(secondCoordinate));
             double distance = ModeExecutionManager.distanceMap.get(list);
-            double time = ModeExecutionManager.timeMap.get(list) + GeneralManager.stopTime;
+            double singleTime = ModeExecutionManager.timeMap.get(list);
+
             for (Agent agent : ride.getAgents()) {
+                boolean doesContain = stop.getPersonsInQuestion().contains(agent);
                 if (inCar.contains(agent)) {
                     agentToDistance.put(agent, agentToDistance.get(agent) + distance);
-                    agentToTime.put(agent, agentToTime.get(agent) + time);
+                    if (doesContain) {
+                        agentToTime.put(agent, agentToTime.get(agent) + singleTime);
+                    } else {
+                        agentToTime.put(agent, agentToTime.get(agent) + singleTime + GeneralManager.stopTime);
+                    }
+                    if((stop.getReasonForStopping() == Stopreason.DROPOFF
+                            || stop.getReasonForStopping() == Stopreason.PARKING) && doesContain) {
+                        inCar.remove(agent);
+                        setMetrics(agent, ride, agentToDistance, agentToTime);
+                    }
                 }
-                if(stop.getReasonForStopping() == Stopreason.PICKUP) {
+                if(stop.getReasonForStopping() == Stopreason.PICKUP && doesContain) {
                     inCar.add(agent);
-                } else if (stop.getReasonForStopping() == Stopreason.DROPOFF
-                        || stop.getReasonForStopping() == Stopreason.PARKING) {
-                    inCar.remove(agent);
-                    setMetrics(agent, ride, agentToDistance, agentToTime);
                 }
             }
             firstCoordinate = secondCoordinate;
         }
-        if (ride.getStops().isEmpty()) {
-
-            ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(ride.getStartPosition(), ride.getEndPosition());
-            long time = path.getTime()/60000L;
-            double distance = path.getDistance();
-            for (Agent agent : inCar) {
-                agentToDistance.put(agent, agentToDistance.get(agent) + distance);
-                agentToTime.put(agent, agentToTime.get(agent) + time);
+        if(!inCar.isEmpty()) {
+            ResponsePath path = CommonFunctionHelper.getSimpleBestGraphhopperPath(firstCoordinate, ride.getEndPosition());
+            inCar.forEach(agent -> {
+                agentToDistance.put(agent, agentToDistance.get(agent) + path.getDistance());
+                agentToTime.put(agent, agentToTime.get(agent) + (path.getTime() / 60000));
                 setMetrics(agent, ride, agentToDistance, agentToTime);
-            }
+            });
         }
 
     }
 
 
     public void setMetrics(Agent agent, Ride ride, Map<Agent, Double> agentToDistance, Map<Agent, Double> agentToTime) {
-
         Set<Object> set;
         if (agent.equals(ride.getDriver())) {
             double co2 = (agentToDistance.get(agent) / 1000) * agent.getCar().getConsumptionPerKm() * agent.getCar().getCo2EmissionPerLiter();
