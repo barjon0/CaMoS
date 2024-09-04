@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 public class GeneralManager {
 
     //public static String uniPLZ = "97070";      //PLZ of target location, (wiwi-building)
-    public static boolean handleLost = true;
+    public static boolean handleLost = false;
     public static boolean plzRadius = false;
     public static double upperRadius;
     public static double lowerRadius;
@@ -35,7 +35,7 @@ public class GeneralManager {
 
     public static int percentPassengers;
 
-    public static boolean disregardLocals;
+    public static boolean disregardLocals = false;
     public static double studentCarConsumptionPerKm;
     public static double studentCarCo2EmissionPerLiter;
     public static double studentCarPricePerLiter;
@@ -76,6 +76,11 @@ public class GeneralManager {
             if (configFile.exists()) {
                 ModeExecutionManager.startModes(args[1]);
             }else throw new RuntimeException("config json file not found.");
+        } else if(args[0].equals("makeCharts")) {
+            File configFile = new File((args[1]));
+            if(configFile.exists()) {
+               ModeExecutionManager.makeCharts(args[1]);
+            }
         }else start(args);
     }
 

@@ -31,7 +31,6 @@ import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.tsphelpers.ActivityOrderConstraint;
 import camos.mode_execution.mobilitymodels.tsphelpers.ActivityWaitConstraintOneAllowed;
 import camos.mode_execution.mobilitymodels.tsphelpers.TransportCosts;
-import org.hsqldb.lib.HsqlArrayHeap;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

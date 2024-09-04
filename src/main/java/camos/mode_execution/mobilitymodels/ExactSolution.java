@@ -9,7 +9,6 @@ import camos.mode_execution.groupings.Ride;
 import camos.mode_execution.groupings.RouteSet;
 import camos.mode_execution.mobilitymodels.modehelpers.CommonFunctionHelper;
 import camos.mode_execution.mobilitymodels.modehelpers.CplexSolver;
-import camos.mode_execution.mobilitymodels.modehelpers.IntervalGraph;
 import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
 import org.jfree.chart.ChartUtils;
 import org.jgrapht.Graphs;
@@ -17,8 +16,6 @@ import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
-
-import java.awt.geom.Point2D;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -65,58 +62,64 @@ public class ExactSolution extends SDCTSP{
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfCores);
         System.out.println("The system is using " + numberOfCores + " cores.");
 
+        //TODO wieder counter entfernen
+        //int counter = 0;
+
         for(List<Agent> oneTarget : agentsByTarget.values()) {
-            List<List<Agent>> preClusterAgents = makePreclusteringRadial(oneTarget, 400);
-            for (List<Agent> agentCluster : preClusterAgents) {
-                System.out.println("starting one Agent Cluster " + (System.nanoTime() / 1_000_000) + "ms");
-                System.out.println("Number of agents is: " + agentCluster.size());
+           // if(counter != 0) {
+                List<List<Agent>> preClusterAgents = makePreclusteringRadial(oneTarget, 400);
+                for (List<Agent> agentCluster : preClusterAgents) {
+		    List<List<List<RouteSet>>> enumeration = new ArrayList<>();
 
-                List<Future<List<RouteSet>>> futureListTo = new ArrayList<>();
-                List<Future<List<RouteSet>>> futureListBack = new ArrayList<>();
+                    System.out.println("starting one Agent Cluster " + (System.nanoTime() / 1_000_000) + "ms");
+                    System.out.println("Number of agents is: " + agentCluster.size());
 
-                List<List<Agent>> preClusters = makePreclusteringRadial(agentCluster, GeneralManager.preClusterSize);
+                    List<List<Future<List<RouteSet>>>> futureLists = new ArrayList<>();
 
-                for (List<Agent> preCluster : preClusters) {
-                    Callable<List<RouteSet>> listCallable = () -> routeEnumerate(preCluster, Requesttype.DRIVETOUNI);
-                    Future<List<RouteSet>> result = executorService.submit(listCallable);
-                    futureListTo.add(result);
+                    List<List<Agent>> preClusters = makePreclusteringRadial(agentCluster, GeneralManager.preClusterSize);
 
-                    Callable<List<RouteSet>> listCallableBack = () -> routeEnumerate(preCluster, Requesttype.DRIVEHOME);
-                    Future<List<RouteSet>> resultBack = executorService.submit(listCallableBack);
-                    futureListBack.add(resultBack);
-                }
-                futureListTo.forEach(ls -> {
-                    try {
-                        lookUpTo.addAll(ls.get());
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new RuntimeException(e);
+                    for (List<Agent> preCluster : preClusters) {
+			List<Future<List<RouteSet>>> tuple = new ArrayList<>();
+
+                        Callable<List<RouteSet>> listCallable = () -> routeEnumerate(preCluster, Requesttype.DRIVETOUNI);
+                        Future<List<RouteSet>> result = executorService.submit(listCallable);
+                        tuple.add(result);
+
+                        Callable<List<RouteSet>> listCallableBack = () -> routeEnumerate(preCluster, Requesttype.DRIVEHOME);
+                        Future<List<RouteSet>> resultBack = executorService.submit(listCallableBack);
+                        tuple.add(resultBack);
+			futureLists.add(tuple);
                     }
-                });
 
-                futureListBack.forEach(ls -> {
-                    try {
-                        lookUpFrom.addAll(ls.get());
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                    futureLists.forEach(ls -> {
+                        try {
+			    List<List<RouteSet>> getter = new ArrayList<>();
+			    getter.add(ls.get(0).get());
+			    getter.add(ls.get(1).get());
+                            enumeration.add(getter);
+                        } catch (InterruptedException | ExecutionException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
 
-                System.out.println("enumarating done for one Agent Cluster " + (System.nanoTime() / 1_000_000) + "ms");
+                    System.out.println("enumarating done for one Agent Cluster " + (System.nanoTime() / 1_000_000) + "ms");
 
-                System.gc();
-                Thread.sleep(1000);
+                    System.gc();
+                    Thread.sleep(1000);
 
-                List<RouteSet> sets = CplexSolver.solveProblem(lookUpTo.stream().toList(), lookUpFrom.stream().toList(), agentCluster);
-                if (sets != null) {
-                    foundRouteSets.addAll(sets);
-                    lookUpTo = new HashSet<>();
-                    lookUpFrom = new HashSet<>();
-                    System.out.println("solved for one agent Cluster");
-                } else {
-                    throw new IllegalStateException("NO solution found");
-                }
-            }
 
+		    for(int i = 0; i < enumeration.size(); i++) {
+                   	 List<RouteSet> sets = CplexSolver.solveProblem(enumeration.get(i).get(0), enumeration.get(i).get(1), preClusters.get(i));
+                   	 if (sets != null) {
+                       		 foundRouteSets.addAll(sets);
+                       		 System.out.println("solved for one small agent Cluster");
+                   	 } else {
+                        	throw new IllegalStateException("NO solution found");
+                    	 }
+              	    }
+ 	      }
+            //}
+           // counter = 1;
         }
         executorService.shutdown();
         System.out.println("preparing done " + (System.nanoTime()/ 1_000_000) + "ms");
@@ -683,6 +686,10 @@ public class ExactSolution extends SDCTSP{
                 order = rs.getOrder();
                 Collections.reverse(order);
             }
+            if((rs.getTypeOfGrouping() == Requesttype.DRIVETOUNI && order.get(0) != rs.getDriver()) ||
+                    (rs.getTypeOfGrouping() == Requesttype.DRIVEHOME && order.get(order.size() - 1) != rs.getDriver())) {
+                throw new IllegalStateException("Fahrer passt nicht zur Ordnung");
+            }
             Ride r = new Ride(startPosition, destination, startTime, endTime, vehicle, rs.getDriver(), req, order);
             rides.add(r);
             computeStops(r);
@@ -729,7 +736,7 @@ public class ExactSolution extends SDCTSP{
         String path4 = "output\\exactDistHist.png";
         try {
             File timeHist4 = new File(StartHelpers.correctFilename(path4));
-            ChartUtils.saveChartAsPNG(timeHist4, createDistanceChart(20), 800, 600);
+            ChartUtils.saveChartAsPNG(timeHist4, createDistanceChart(20), 2000, 600);
         }catch (Exception e){
             throw new RuntimeException(e.getMessage());
         }

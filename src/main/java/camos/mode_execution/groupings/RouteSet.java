@@ -2,10 +2,8 @@ package camos.mode_execution.groupings;
 
 import camos.mode_execution.Agent;
 import camos.mode_execution.Requesttype;
-import org.openjdk.nashorn.internal.ir.annotations.Immutable;
-
 import java.util.*;
-import java.util.stream.Collectors;
+
 
 public class RouteSet extends Grouping{
     double timeInMinutes;

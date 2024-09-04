@@ -29,11 +29,8 @@ import camos.mode_execution.mobilitymodels.tsphelpers.ActivityWaitConstraintNone
 import camos.mode_execution.mobilitymodels.tsphelpers.ActivityWaitConstraintOneAllowed;
 import camos.mode_execution.mobilitymodels.tsphelpers.TransportCosts;
 import org.apache.commons.lang3.StringUtils;
-
-import java.awt.geom.Point2D;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static camos.mode_execution.ModeExecutionManager.graphHopper;
 

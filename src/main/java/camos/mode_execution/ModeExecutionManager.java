@@ -1,5 +1,7 @@
 package camos.mode_execution;
 
+import camos.mode_execution.mobilitymodels.ExactSolution;
+import camos.mode_execution.mobilitymodels.SDCTSP;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.config.CHProfile;
 import com.graphhopper.config.Profile;
@@ -10,6 +12,7 @@ import camos.mode_execution.mobilitymodels.MobilityMode;
 import camos.mode_execution.mobilitymodels.modehelpers.StartHelpers;
 import org.apache.commons.io.IOUtils;
 import org.geotools.referencing.CRS;
+import org.jfree.chart.ChartUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -46,12 +49,8 @@ public class ModeExecutionManager {
         modeValues = new HashMap<>();
         String[] modes;
 
-        graphHopper = new GraphHopper();
-        graphHopper.setOSMFile("sources\\merged.osm.pbf"); //TODO
-        graphHopper.setGraphHopperLocation("target/routing-graph-cache");
-        graphHopper.setProfiles(new Profile("car").setVehicle("car").setTurnCosts(false),new Profile("foot").setVehicle("foot").setTurnCosts(false));
-        graphHopper.getCHPreparationHandler().setCHProfiles(new CHProfile("car"),new CHProfile("foot"));
-        graphHopper.importOrLoad();
+        initGraphopper();
+
         JSONObject config = new JSONObject(IOUtils.toString(new FileInputStream(configPath), "UTF-8"));
         getGlobalConfig(config);
 
@@ -81,12 +80,24 @@ public class ModeExecutionManager {
         }else throw new RuntimeException("modes json file not found.");
     }
 
+    private static void initGraphopper() {
+        graphHopper = new GraphHopper();
+        System.out.println(graphHopper.toString());
+        graphHopper.setOSMFile("sources/merged.osm.pbf"); //TODO
+        graphHopper.setGraphHopperLocation("target/routing-graph-cache");
+        graphHopper.setProfiles(new Profile("car").setVehicle("car").setTurnCosts(false),new Profile("foot").setVehicle("foot").setTurnCosts(false));
+        graphHopper.getCHPreparationHandler().setCHProfiles(new CHProfile("car"),new CHProfile("foot"));
+        graphHopper.importOrLoad();
+    }
+
 
     public static void startMode(String modeName, List<Agent> agents) throws Exception {
         MobilityMode mode = findMode(modeName);
         mode.prepareMode(agents);
         mode.startMode();
-        mode.checkIfConstraintsAreBroken(agents);
+        if(mode.checkIfConstraintsAreBroken(agents)) {
+            throw new IllegalStateException("There are constraints that are not upheld");
+        }
         if(mode.getName().equals("EverybodyDrives")){ // TODO
             compareMode = mode;
         }
@@ -229,5 +240,55 @@ public class ModeExecutionManager {
         mode.checkIfConstraintsAreBroken(agents);
         mode.writeResultsToFile();
     }
+
+    public static void makeCharts(String pathToConfig) throws Exception {
+        initGraphopper();
+        JSONObject config = new JSONObject(IOUtils.toString(new FileInputStream(pathToConfig), "UTF-8"));
+        getGlobalConfig(config);
+
+        List<String[]> allSingle = new ArrayList<>();
+        try(BufferedReader reader = new BufferedReader(new FileReader(config.getString("single result file")))) {
+            String line;
+
+            reader.readLine();
+            while ((line = reader.readLine()) != null) {
+                String[] values = line.split(",");
+                allSingle.add(values);
+            }
+        }
+
+        List<String[]> allAccum = new ArrayList<>();
+        try(BufferedReader reader = new BufferedReader(new FileReader(config.getString("accum result file")))) {
+            String line;
+
+            reader.readLine();
+            while ((line = reader.readLine()) != null) {
+                String[] values = line.split(",");
+                allAccum.add(values);
+            }
+        }
+        Class<?> modeClass = Class.forName("camos.mode_execution.mobilitymodels.ExactSolution");
+        Constructor<?> ctor = modeClass.getConstructor();
+        ExactSolution mode = (ExactSolution) ctor.newInstance();
+        mode.setAgents(agents);
+
+        mode.fillMaps(allSingle, allAccum);
+        String path4 = "output/distChart.png";
+        try {
+            File distHist4 = new File(StartHelpers.correctFilename(path4));
+            ChartUtils.saveChartAsPNG(distHist4, mode.createDistanceChart(20), 2000, 600);
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+
+        String path5 = "output/timeChart.png";
+        try {
+            File timeHist4 = new File(StartHelpers.correctFilename(path5));
+            ChartUtils.saveChartAsPNG(timeHist4, mode.createTimeChart(20), 800, 600);
+        }catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+    }
+
 
 }

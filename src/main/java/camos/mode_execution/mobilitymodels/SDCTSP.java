@@ -19,6 +19,7 @@ import org.jfree.chart.renderer.xy.XYItemRenderer;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.statistics.HistogramDataset;
 
+import javax.tools.Diagnostic;
 import java.awt.*;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -49,6 +50,43 @@ public abstract class SDCTSP extends MobilityMode {
         minutesRide = new HashMap<>();
     }
 
+    public void fillMaps(List<String[]> allSingle, List<String[]> allAccum) {
+        //alle rides hinzufügen
+        for (String[] array : allAccum) {
+            Ride ride = new Ride();
+            String arrayString = array[array.length - 1];
+            String clean = arrayString.replaceAll("\\[|\\]", "");
+            String[] ids = clean.split(",");
+            int[] idInts = Arrays.stream(ids).mapToInt(Integer::parseInt).toArray();
+            List<Agent> agentList = new ArrayList<>();
+            for (int id : idInts) {
+                Agent ag = agents.stream().filter(a -> a.getId() == id).findAny().get();
+                agentList.add(ag);
+                if (agentToRides.containsKey(ag)) {
+                    agentToRides.get(ag).add(ride);
+                } else {
+                    List<Ride> agRides = new ArrayList<>();
+                    agRides.add(ride);
+                    agentToRides.put(ag, agRides);
+                }
+            }
+            int driverId = Integer.parseInt(array[array.length - 2]);
+            ride.setDriver(agentList.stream().filter(a -> a.getId() == driverId).findAny().get());
+            ride.setAgents(agentList);
+            ride.setTypeOfGrouping(Requesttype.valueOf(array[1]));
+            rides.add(ride);
+        }
+
+        for (String[] array : allSingle) {
+            int id = Integer.parseInt(array[0]);
+            Agent agent = agents.stream().filter(a -> a.getId() == id).findAny().get();
+            List<Double> timeList = new ArrayList<>();
+            timeList.add(Double.parseDouble(array[3]));
+            timeList.add(Double.parseDouble(array[7]));
+            minutesTravelledBoth.put(agent, timeList);
+        }
+    }
+
     @Override
     public void prepareMode(List<Agent> agents) throws Exception {
 
@@ -66,7 +104,7 @@ public abstract class SDCTSP extends MobilityMode {
 
     @Override
     public boolean checkIfConstraintsAreBroken(List<Agent> agents) {
-        //checks if everyone has exactly one ride to and from, intervals fit, capacities fit, drivers match, and if max travel time is upheld
+        //checks if everyone has exactly one ride to and from, intervals fit, capacities fit, drivers match
         Map<Coordinate, List<Agent>> agentsByTarget = agents.stream()
                 .collect(Collectors.groupingBy(a -> a.getRequest().getDropOffPosition()));
         Map<Coordinate, List<Ride>> ridesByTarget = rides.stream().collect(Collectors.groupingBy(r -> {
