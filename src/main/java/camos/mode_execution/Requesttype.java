@@ -14,6 +14,15 @@ public enum Requesttype {
         }
     }
 
+    public static Requesttype getValue(String name) {
+        if(name.equals("ToWork")) {
+            return DRIVETOUNI;
+        } else if(name.equals("FromWork")) {
+            return DRIVEHOME;
+        } else {
+            throw new IllegalStateException("wrong name given to requesttype");
+        }
+    }
     @Override
     public String toString() {
         if (this == Requesttype.DRIVETOUNI) {

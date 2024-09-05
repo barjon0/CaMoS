@@ -117,8 +117,8 @@ public class AgentCollector {
      * This function created the specified number of agents with the help of omod.
      * */
     public static List<MobiAgent> createOmodAgents(int number, String osmFilePath, String areaFilePath){
-        File osmFile = new File("sources\\merged.osm.pbf"); //TODO
-        File areaFile = new File("sources\\map.geojson"); //TODO
+        File osmFile = new File("sources/merged.osm.pbf"); //TODO
+        File areaFile = new File("sources/map.geojson"); //TODO
         Omod omod = Omod.Companion.defaultFactory(areaFile, osmFile);
         List<MobiAgent> agents = omod.run(number, Weekday.UNDEFINED, 1);
         return agents;

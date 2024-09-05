@@ -264,7 +264,16 @@ public class ModeExecutionManager {
             reader.readLine();
             while ((line = reader.readLine()) != null) {
                 String[] values = line.split(",");
-                allAccum.add(values);
+                StringBuilder group = new StringBuilder();
+                for (int i = 8; i < values.length; i++) {
+                    group.append(values[i]);
+                }
+                String[] finalArray = new String[9];
+                for (int i = 0; i < 8; i++) {
+                    finalArray[i] = values[i];
+                }
+                finalArray[8] = group.toString();
+                allAccum.add(finalArray);
             }
         }
         Class<?> modeClass = Class.forName("camos.mode_execution.mobilitymodels.ExactSolution");

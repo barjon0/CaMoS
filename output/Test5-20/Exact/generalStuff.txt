@@ -1,0 +1,5 @@
+Total Kilometers: 13828.609379806827
+Total Minutes: 17017.0
+The average Seat Count 2.627016129032258
+The number of rides alone: 249
+Average Time Travelled: 13.495203843694036

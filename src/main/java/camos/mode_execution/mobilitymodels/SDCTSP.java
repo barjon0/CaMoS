@@ -52,14 +52,28 @@ public abstract class SDCTSP extends MobilityMode {
 
     public void fillMaps(List<String[]> allSingle, List<String[]> allAccum) {
         //alle rides hinzufügen
+        double totalMinutes = 0;
+        double totalKilometers = 0;
+        double avgSeatCount = 0;
+        int aloneRides = 0;
+        double avgTimeTravelledTo = 0;
+
         for (String[] array : allAccum) {
             Ride ride = new Ride();
             String arrayString = array[array.length - 1];
-            String clean = arrayString.replaceAll("\\[|\\]", "");
-            String[] ids = clean.split(",");
+            System.out.println(arrayString);
+            String clean = arrayString.replaceAll("[\\[\\]]", "");
+            String[] ids = clean.split(" ");
             int[] idInts = Arrays.stream(ids).mapToInt(Integer::parseInt).toArray();
             List<Agent> agentList = new ArrayList<>();
+            totalKilometers += Double.parseDouble(array[3]);
+            totalMinutes += Double.parseDouble(array[4]);
+            avgSeatCount += ids.length;
+            if (ids.length == 1) {
+                aloneRides++;
+            }
             for (int id : idInts) {
+                System.out.println(id);
                 Agent ag = agents.stream().filter(a -> a.getId() == id).findAny().get();
                 agentList.add(ag);
                 if (agentToRides.containsKey(ag)) {
@@ -73,7 +87,7 @@ public abstract class SDCTSP extends MobilityMode {
             int driverId = Integer.parseInt(array[array.length - 2]);
             ride.setDriver(agentList.stream().filter(a -> a.getId() == driverId).findAny().get());
             ride.setAgents(agentList);
-            ride.setTypeOfGrouping(Requesttype.valueOf(array[1]));
+            ride.setTypeOfGrouping(Requesttype.getValue(array[1]));
             rides.add(ride);
         }
 
@@ -83,8 +97,16 @@ public abstract class SDCTSP extends MobilityMode {
             List<Double> timeList = new ArrayList<>();
             timeList.add(Double.parseDouble(array[3]));
             timeList.add(Double.parseDouble(array[7]));
+            avgTimeTravelledTo += (Double.parseDouble(array[3]) + Double.parseDouble(array[7]));
             minutesTravelledBoth.put(agent, timeList);
         }
+
+
+        System.out.println("Total Minutes Travelled: " + totalMinutes + "\n" +
+                "Total Kilometers Travelled: " + totalKilometers + "\n" +
+                "Average Seat Count: " + (avgSeatCount / rides.size()) + "\n" +
+                "Number of Rides alone: " + aloneRides);
+        System.out.println("Average Time Travelled: " + (avgTimeTravelledTo / (2L*agents.size())));
     }
 
     @Override
